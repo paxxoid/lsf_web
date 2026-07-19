@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+
+# Django development database
+db.sqlite3
+db.sqlite3-journal
+
+# Environment variables
+.env
+.env.*
+
+# Collected static files
+staticfiles/
+
+# User uploads
+media/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# VS Code local overrides
+.vscode/settings.json
