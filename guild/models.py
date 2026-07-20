@@ -24,6 +24,9 @@ class EverQuestClass(models.TextChoices):
     SHAMAN = "shaman", "Shaman"
     WARRIOR = "warrior", "Warrior"
     WIZARD = "wizard", "Wizard"
+    
+    
+
 
 
 class RaidAttendance(models.Model):

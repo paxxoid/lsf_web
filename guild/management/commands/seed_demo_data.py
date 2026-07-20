@@ -17,6 +17,13 @@ CLASS_COUNTS = {
     "enchanter": 5,
     "bard": 5,
     "druid": 4,
+    "monk": 4, 
+    "beastlord": 3,
+    "shaman": 3,
+    "magician": 2,
+    "rogue": 2,
+    "Shaman": 3,
+   
 }
 
 

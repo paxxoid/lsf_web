@@ -300,6 +300,8 @@ input, select, textarea {
 .welcome-card__body {
     max-width: 46rem;
     margin: 0 auto;
+    padding: 8px 0;
+    border-top: 1px solid rgba(156, 111, 39, 0.2);
 }
 
 .welcome-card__body p {
