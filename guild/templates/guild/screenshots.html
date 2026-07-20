@@ -1,0 +1,13 @@
+{% extends 'guild/base.html' %}
+{% block title %}Screenshots · Loot & Some Fun{% endblock %}
+{% block content %}
+<section class="content-shell page-header"><h1>Screenshots</h1><p>Guild adventures, victories, and memorable moments.</p></section>
+<section class="content-shell screenshot-grid">
+{% for screenshot in images %}
+    <figure class="panel screenshot-card">
+        <img src="{{ screenshot.image.url }}" alt="{{ screenshot.title }}">
+        <figcaption><strong>{{ screenshot.title }}</strong><br>{{ screenshot.caption }}</figcaption>
+    </figure>
+{% empty %}<article class="panel"><p>No screenshots have been uploaded yet. Add one through Django Admin.</p></article>{% endfor %}
+</section>
+{% endblock %}

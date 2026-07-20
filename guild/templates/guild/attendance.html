@@ -1,0 +1,101 @@
+{% extends "guild/base.html" %}
+
+{% block title %}
+    Loot · Loot & Some Fun
+{% endblock %}
+
+{% block content %}
+
+<section class="content-shell page-header">
+    <h1>Raid Attendance</h1>
+
+    <p>
+        Raid attendance records for each event.
+    </p>
+</section>
+
+<section class="content-shell panel">
+
+    <form method="get" action="" class="loot-search-form">
+        <label for="loot-search">
+            Search attendance
+        </label>
+
+        <div class="loot-search-controls">
+            <input
+                type="search"
+                id="loot-search"
+                name="q"
+                value="{{ search_query }}"
+                placeholder="Search player, item, zone, NPC, or type..."
+                autocomplete="off"
+            >
+
+            <button type="submit">
+                Search
+            </button>
+
+            {% if search_query %}
+                <a href="{% url 'guild:loot' %}" class="button-link">
+                    Clear
+                </a>
+            {% endif %}
+        </div>
+    </form>
+
+    {% if search_query %}
+        <p class="search-summary">
+            Results for <strong>{{ search_query }}</strong>
+        </p>
+    {% endif %}
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Raid Event</th>
+                    <th>Member</th>
+                    <th>Attended</th>
+                    <th>Notes</th>
+  
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for record in records %}
+                    <tr>
+                        <td>
+                            {{ record.raid_event }}
+                        </td>
+
+                        <td>
+                            {{ record.member }}
+                        </td>
+
+                        <td>
+                            {{ record.attended|yesno:"Yes,No" }}
+                        </td>
+
+                        <td>
+                            {{ record.notes }}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6">
+                            {% if search_query %}
+                                No raiders were found matching
+                                “{{ search_query }}”.
+                            {% else %}
+                                No raid attendance records have been recorded.
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</section>
+
+{% endblock %}

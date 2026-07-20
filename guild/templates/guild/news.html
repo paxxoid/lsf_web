@@ -1,0 +1,15 @@
+{% extends 'guild/base.html' %}
+{% block title %}Guild News · Loot & Some Fun{% endblock %}
+{% block content %}
+<section class="content-shell page-header"><h1>Guild News</h1><p>Announcements, progression updates, and community news.</p></section>
+<section class="content-shell card-list">
+{% for news in news_items %}
+    <article class="panel event-card">
+        <time>{{ news.published_at|date:'F j, Y' }}</time>
+        <h2>{{ news.title }}</h2>
+        <p>{{ news.summary }}</p>
+        {% if news.body %}<div>{{ news.body|linebreaks }}</div>{% endif %}
+    </article>
+{% empty %}<article class="panel"><p>No news has been published.</p></article>{% endfor %}
+</section>
+{% endblock %}

@@ -1,0 +1,5 @@
+{% extends 'guild/base.html' %}
+{% block title %}Officer Login{% endblock %}
+{% block content %}
+<section class="content-shell panel form-panel"><h1>Officer Login</h1><form method="post">{% csrf_token %}{{ form.as_p }}<button class="gold-button" type="submit">Log in</button></form></section>
+{% endblock %}

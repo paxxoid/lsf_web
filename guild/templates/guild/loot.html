@@ -1,0 +1,110 @@
+{% extends "guild/base.html" %}
+
+{% block title %}
+    Loot · Loot & Some Fun
+{% endblock %}
+
+{% block content %}
+
+<section class="content-shell page-header">
+    <h1>Guild Loot</h1>
+
+    <p>
+        Recent item awards recorded by officers or integrations.
+    </p>
+</section>
+
+<section class="content-shell panel">
+
+    <form method="get" action="" class="loot-search-form">
+        <label for="loot-search">
+            Search loot
+        </label>
+
+        <div class="loot-search-controls">
+            <input
+                type="search"
+                id="loot-search"
+                name="q"
+                value="{{ search_query }}"
+                placeholder="Search player, item, zone, NPC, or type..."
+                autocomplete="off"
+            >
+
+            <button type="submit">
+                Search
+            </button>
+
+            {% if search_query %}
+                <a href="{% url 'guild:loot' %}" class="button-link">
+                    Clear
+                </a>
+            {% endif %}
+        </div>
+    </form>
+
+    {% if search_query %}
+        <p class="search-summary">
+            Results for <strong>{{ search_query }}</strong>
+        </p>
+    {% endif %}
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Player</th>
+                    <th>Type</th>
+                    <th>Item</th>
+                    <th>Zone</th>
+                    <th>NPC</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for record in records %}
+                    <tr>
+                        <td>
+                            {{ record.awarded_at|date:"Y-m-d g:i A" }}
+                        </td>
+
+                        <td>
+                            {{ record.member }}
+                        </td>
+
+                        <td>
+                            {{ record.get_toon_type_display }}
+                        </td>
+
+                        <td>
+                            {{ record.item_name }}
+                        </td>
+
+                        <td>
+                            {{ record.zone|default:"—" }}
+                        </td>
+
+                        <td>
+                            {{ record.npc|default:"—" }}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6">
+                            {% if search_query %}
+                                No loot records matched
+                                “{{ search_query }}”.
+                            {% else %}
+                                No loot has been recorded.
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</section>
+
+{% endblock %}

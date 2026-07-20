@@ -1,0 +1,18 @@
+{% extends 'guild/base.html' %}
+{% block title %}Apply · Loot & Some Fun{% endblock %}
+{% block content %}
+<section class="content-shell page-header"><h1>Apply to the Guild</h1><p>Tell us about your character and what you are looking for in a guild.</p></section>
+<section class="content-shell panel form-panel">
+<form method="post">
+    {% csrf_token %}
+    {% for field in form %}
+        <div class="form-row">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+        </div>
+    {% endfor %}
+    <button class="gold-button" type="submit">Submit application</button>
+</form>
+</section>
+{% endblock %}

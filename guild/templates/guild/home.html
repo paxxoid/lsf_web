@@ -1,29 +1,244 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
+{% extends 'guild/base.html' %}
+{% load static %}
+{% block title %}Loot & Some Fun · Project Quarm{% endblock %}
+{% block content %}
+<section class="hero" aria-label="Loot and Some Fun guild banner">
+    <img src="{% static 'guild/images/hero-banner.png' %}" alt="Loot and Some Fun on Project Quarm" class="hero-banner">
+</section>
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1"
-    >
+<section class="content-shell home-grid">
+    <article class="panel welcome-panel">
+    <div class="welcome-card__inner">
+        <h2>Welcome to Loot and Some Fun</h2>
 
-    <title>{{ guild_name }}</title>
-</head>
+        <div class="welcome-card__body">
+            <p>
+                <strong>Loot and Some Fun</strong> is a casual, laid-back guild
+                on Project Quarm. We enjoy Norrath, help each other out, share
+                laughs, and tackle content at our own pace.
+            </p>
 
-<body>
-    <header>
-        <h1>{{ guild_name }}</h1>
-        <p>An EverQuest guild on {{ server_name }}</p>
-    </header>
+            <p>
+                Whether you’re a returning veteran or new to EverQuest,
+                you’ll find a friendly group of players who value respect,
+                camaraderie, and having a good time.
+            </p>
+        </div>
 
-    <main>
-        <h2>Guild Website</h2>
+        <div class="ornamental-divider" aria-hidden="true">
+            <span></span>
+        </div>
 
-        <p>
-            Django is installed and the guild application
-            is working.
+        <p class="welcome-card__motto">
+            Good people. Good times. Good loot.<br>
+            That’s what it’s all about.
         </p>
-    </main>
-</body>
-</html>
+
+        <div class="welcome-card__ornament" aria-hidden="true">
+            ◆
+        </div>
+    </div>
+    </article>
+
+    <article class="panel">
+    <div class="raid-card__inner">
+        <h2 class="raid-card__title">
+            
+            Raid Schedule
+        </h2>
+
+        <div class="raid-list">
+            <div class="raid-row">
+                <span class="raid-day">Sun</span>
+
+                <time class="raid-time">
+                    7:00 PM – 10:00 PM
+                </time>
+
+                <span class="raid-name">
+                    Tier / Event Raids
+                </span>
+            </div>
+
+            <div class="raid-row">
+                <span class="raid-day">Tue</span>
+
+                <time class="raid-time">
+                    7:00 PM – 10:00 PM
+                </time>
+
+                <span class="raid-name">
+                    Kunark Raids
+                </span>
+            </div>
+
+            <div class="raid-row">
+                <span class="raid-day">Thu</span>
+
+                <time class="raid-time">
+                    7:00 PM – 10:00 PM
+                </time>
+
+                <span class="raid-name">
+                    Velious Raids
+                </span>
+            </div>
+
+            <div class="raid-row">
+                <span class="raid-day">Sat</span>
+
+                <time class="raid-time">
+                    3:00 PM – 6:00 PM
+                </time>
+
+                <span class="raid-name">
+                    Open World / Missions
+                </span>
+            </div>
+        </div>
+
+        <div class="raid-divider" aria-hidden="true">
+            <span></span>
+        </div>
+
+        <p class="raid-timezone">
+            All times are Eastern Time.
+        </p>
+
+        <div class="raid-card__actions">
+            <a
+                href="{% url 'guild:raids' %}"
+                class="raid-button"
+            >
+                View Full Schedule
+            </a>
+        </div>
+    </div>
+    </article>
+
+    <article class="panel">
+    <div class="news-card__inner">
+
+        <h2 class="news-card__title">
+            Guild News
+        </h2>
+
+        <div class="news-list">
+            {% for news in news_items %}
+                <article class="news-row">
+                    <time
+                        class="news-date"
+                        datetime="{{ news.published_at|date:'Y-m-d' }}"
+                    >
+                        {{ news.published_at|date:"M j" }}
+                    </time>
+
+                    <div class="news-content">
+                        <h3>{{ news.title }}</h3>
+
+                        {% if news.summary %}
+                            <p>{{ news.summary|truncatewords:18 }}</p>
+                        {% endif %}
+                    </div>
+                </article>
+            {% empty %}
+                <p class="news-empty">
+                    No guild news has been posted.
+                </p>
+            {% endfor %}
+        </div>
+
+        <div class="news-divider" aria-hidden="true">
+            <span></span>
+        </div>
+
+        <div class="news-card__actions">
+            <a
+                href="{% url 'guild:news' %}"
+                class="news-button"
+            >
+                View All News
+            </a>
+        </div>
+
+    </div>
+
+ 
+    </article>
+</section>
+
+<section class="content-shell panel class-panel">
+
+    <div class="class-showcase__inner">
+
+        <header class="class-showcase__header">
+            <h2>Roster Highlights</h2>
+        </header>
+
+        <div
+            class="class-showcase__divider"
+            aria-hidden="true"
+        >
+            <span></span>
+        </div>
+
+        <div class="class-grid">
+            {% for class_row in class_counts %}
+
+                <article class="class-card">
+                    <div class="class-card__icon-wrap">
+
+                        <img
+                            class="class-card__icon"
+                            src="{% static 'guild/images/classes/' %}{{ class_row.label|lower }}.png"
+                            alt="{{ class_row.label }} class icon"
+                            width="96"
+                            height="96"
+                            loading="lazy"
+
+                        >
+
+                        <span
+                            class="class-card__count"
+                            title="{{ class_row.total }} active members"
+                        >
+                            {{ class_row.total }}
+                        </span>
+                    </div>
+
+                    <h3>
+                        {% if class_row.label|lower == "shadowknight" %}
+                            Shadow<br>knight
+                        {% else %}
+                            {{ class_row.label }}
+                        {% endif %}
+                    </h3>
+
+                    <span class="class-card__caption">
+                        Active member{{ class_row.total|pluralize }}
+                    </span>
+                </article>
+
+            {% empty %}
+
+                <p class="class-showcase__empty">
+                    No active guild members have been added.
+                </p>
+
+            {% endfor %}
+        </div>
+
+        <footer class="class-showcase__footer">
+            <span aria-hidden="true">◆</span>
+
+            <p>
+                A diverse group of adventurers ready for anything
+                Norrath throws our way.
+            </p>
+
+            <span aria-hidden="true">◆</span>
+        </footer>
+
+    </div>
+</section>
+{% endblock %}

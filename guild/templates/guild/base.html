@@ -1,0 +1,114 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Loot & Some Fun{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'guild/css/site.css' %}">
+</head>
+<body>
+    <header class="site-header">
+        <a class="brand" href="{% url 'guild:home' %}">Loot & Some Fun</a>
+        <button class="nav-toggle" type="button" aria-label="Toggle navigation" data-nav-toggle>☰</button>
+        <nav class="main-nav" data-nav>
+            <a href="{% url 'guild:home' %}">Home</a>
+            <a href="{% url 'guild:about' %}">About</a>
+            <a href="{% url 'guild:roster' %}">Roster</a>
+            <a href="{% url 'guild:raids' %}">Raids</a>
+            <a href="{% url 'guild:loot' %}">Loot</a>
+            <a href="{% url 'guild:attendance' %}">Attendance</a>
+            <a href="{% url 'guild:screenshots' %}">Screenshots</a>
+            <a class="button-link" href="{% url 'guild:apply' %}">Apply</a>
+        </nav>
+    </header>
+
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}<div class="message">{{ message }}</div>{% endfor %}
+        </div>
+    {% endif %}
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+    <div class="site-footer__inner">
+
+        <section class="footer-feature footer-feature--discord">
+            <div class="footer-feature__icon" aria-hidden="true"></div>
+
+            <div class="footer-feature__content">
+                <h2>Join us on Discord</h2>
+
+                <p>
+                    Chat with the guild, get updates,
+                    and join the fun!
+                </p>
+
+                <a
+                    href="https://discord.gg/lootandsomefun"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    discord.gg/lootandsomefun
+                </a>
+            </div>
+        </section>
+
+        <section class="footer-feature footer-feature--contact">
+            <div class="footer-feature__icon" aria-hidden="true"></div>
+
+            <div class="footer-feature__content">
+                <h2>Get in Touch</h2>
+
+                <p>
+                    Have questions or want to say hi?
+                    Reach out to our officers in-game
+                    or contact us on Discord.
+                </p>
+            </div>
+        </section>
+
+    <section class="footer-feature footer-feature--quarm">
+        <div class="footer-feature__icon footer-feature__icon--quarm">
+            <img
+                src="{% static 'guild/images/project_quarm.png' %}"
+                alt="Project Quarm"
+                width="180"
+                height="135"
+                loading="lazy"
+            >
+        </div>
+
+        <div class="footer-feature__content">
+            <h2>On Project Quarm</h2>
+
+            <p>
+                Proudly adventuring on Project Quarm —
+                the classic EverQuest experience.
+            </p>
+        </div>
+        </section>
+
+    </div>
+
+    <div class="site-footer__bottom">
+        <span>© 2026 Loot and Some Fun</span>
+        <span aria-hidden="true">◆</span>
+        <span>Project Quarm</span>
+        <span aria-hidden="true">◆</span>
+        <span>All rights reserved</span>
+    </div>
+    </footer>
+
+    
+
+    <script>
+        const toggle = document.querySelector('[data-nav-toggle]');
+        const nav = document.querySelector('[data-nav]');
+        if (toggle && nav) toggle.addEventListener('click', () => nav.classList.toggle('open'));
+    </script>
+</body>
+</html>

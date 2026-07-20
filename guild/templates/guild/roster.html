@@ -1,0 +1,23 @@
+{% extends 'guild/base.html' %}
+{% block title %}Roster · Loot & Some Fun{% endblock %}
+{% block content %}
+<section class="content-shell page-header"><h1>Guild Roster</h1><p>Active mains and alternate characters.</p></section>
+<section class="content-shell panel table-wrap">
+<table>
+    <thead><tr><th>Character</th><th>Class</th><th>Level</th><th>Race</th><th>Rank</th><th>Type</th><th>Main</th></tr></thead>
+    <tbody>
+    {% for member in members %}
+        <tr>
+            <td>{{ member.character_name }}</td>
+            <td>{{ member.get_class_name_display }}</td>
+            <td>{{ member.level }}</td>
+            <td>{{ member.race|default:'—' }}</td>
+            <td>{{ member.get_rank_display }}</td>
+            <td>{{ member.get_character_type_display }}</td>
+            <td>{{ member.main_character|default:'—' }}</td>
+        </tr>
+    {% empty %}<tr><td colspan="7">No active members have been added.</td></tr>{% endfor %}
+    </tbody>
+</table>
+</section>
+{% endblock %}

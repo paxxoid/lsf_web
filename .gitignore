@@ -1,29 +1,19 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
 
 # Virtual environment
 .venv/
 
-# Django development database
-db.sqlite3
-db.sqlite3-journal
-
-# Environment variables
-.env
-.env.*
-
-# Collected static files
+# Django
+*.sqlite3
+media/
 staticfiles/
 
-# User uploads
-media/
+# Secrets
+.env
 
-# Testing and coverage
+# Tools
 .pytest_cache/
 .coverage
-htmlcov/
-
-# VS Code local overrides
 .vscode/settings.json
