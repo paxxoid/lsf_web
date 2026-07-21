@@ -3,7 +3,7 @@ from django.db.models import Count
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.db.models import Q
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 
 
 from .forms import GuildApplicationForm
@@ -33,9 +33,18 @@ def home(request):
             .order_by("class_name")
         )
     ]
+    latest_news = (
+        GuildNews.objects
+        .filter(
+            is_published=True,
+            published_at__lte=timezone.now(),
+        )
+        .order_by("-published_at")[:3]
+    )
 
     context = {
-        "news_items": GuildNews.objects.filter(published=True)[:3],
+        "latest_news": latest_news,
+        "news_items": GuildNews.objects.filter(is_published=True)[:3],
         "raid_events": RaidEvent.objects.filter(
             public=True,
             status=RaidEvent.Status.SCHEDULED,
@@ -122,9 +131,37 @@ def screenshots(request):
 
 
 def news(request):
-    items = GuildNews.objects.filter(published=True)
-    return render(request, "guild/news.html", {"news_items": items})
+    stories = (
+        GuildNews.objects
+        .filter(
+            is_published=True,
+            published_at__lte=timezone.now(),
+        )
+        .order_by("-published_at")
+    )
 
+    return render(
+        request,
+        "guild/news.html",
+        {
+            "stories": stories,
+        },
+    )
+def news_detail(request, slug):
+    story = get_object_or_404(
+        GuildNews,
+        slug=slug,
+        is_published=True,
+        published_at__lte=timezone.now(),
+    )
+
+    return render(
+        request,
+        "guild/news_detail.html",
+        {
+            "story": story,
+        },
+    )
 
 def apply(request):
     if request.method == "POST":

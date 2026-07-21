@@ -12,7 +12,18 @@ urlpatterns = [
     path("attendance/", views.attendance, name="attendance"),
     path("loot/", views.loot, name="loot"),
     path("screenshots/", views.screenshots, name="screenshots"),
-    path("news/", views.news, name="news"),
+    #path("news/", views.news, name="news"),
     path("apply/", views.apply, name="apply"),
     path("apply/success/", views.application_success, name="application_success"),
+    path(
+        "news/",
+        views.news,
+        name="news",
+    ),
+
+    path(
+        "news/<slug:slug>/",
+        views.news_detail,
+        name="news_detail",
+    ),    
 ]

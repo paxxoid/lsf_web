@@ -36,7 +36,7 @@
             </button>
 
             {% if search_query %}
-                <a href="{% url 'guild:loot' %}" class="button-link">
+                <a href="{% url 'guild:attendance' %}" class="button-link">
                     Clear
                 </a>
             {% endif %}
@@ -55,6 +55,7 @@
                 <tr>
                     <th>Raid Event</th>
                     <th>Member</th>
+                    <th>Class</th>
                     <th>Attended</th>
                     <th>Notes</th>
   
@@ -70,6 +71,9 @@
 
                         <td>
                             {{ record.member }}
+                        </td>
+                        <td>
+                            {{ record.member.get_class_name_display }}
                         </td>
 
                         <td>

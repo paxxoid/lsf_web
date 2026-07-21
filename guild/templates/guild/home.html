@@ -44,55 +44,23 @@
             
             Raid Schedule
         </h2>
-
+        {% for raid in raid_events %}
         <div class="raid-list">
             <div class="raid-row">
-                <span class="raid-day">Sun</span>
+                <span class="raid-day">{{ raid.start_at|date:'D' }}</span>
 
                 <time class="raid-time">
-                    7:00 PM – 10:00 PM
+                    {{ raid.start_at|date:'g:i A' }}–{{ raid.end_at|date:'g:i A' }}
                 </time>
 
                 <span class="raid-name">
-                    Tier / Event Raids
+                    {{ raid.title }}
                 </span>
             </div>
 
-            <div class="raid-row">
-                <span class="raid-day">Tue</span>
-
-                <time class="raid-time">
-                    7:00 PM – 10:00 PM
-                </time>
-
-                <span class="raid-name">
-                    Kunark Raids
-                </span>
-            </div>
-
-            <div class="raid-row">
-                <span class="raid-day">Thu</span>
-
-                <time class="raid-time">
-                    7:00 PM – 10:00 PM
-                </time>
-
-                <span class="raid-name">
-                    Velious Raids
-                </span>
-            </div>
-
-            <div class="raid-row">
-                <span class="raid-day">Sat</span>
-
-                <time class="raid-time">
-                    3:00 PM – 6:00 PM
-                </time>
-
-                <span class="raid-name">
-                    Open World / Missions
-                </span>
-            </div>
+        {% empty %}
+            <p>No guild raids are scheduled.</p>
+        {% endfor %}
         </div>
 
         <div class="raid-divider" aria-hidden="true">
@@ -114,28 +82,30 @@
     </div>
     </article>
 
+    {% load wagtailimages_tags %}
     <article class="panel">
     <div class="news-card__inner">
 
         <h2 class="news-card__title">
             Guild News
         </h2>
-
+        <a href="{% url 'guild:news' %}">
+            View All News
+        </a>
         <div class="news-list">
-            {% for news in news_items %}
+             {% for story in latest_news %}
                 <article class="news-row">
-                    <time
-                        class="news-date"
-                        datetime="{{ news.published_at|date:'Y-m-d' }}"
-                    >
-                        {{ news.published_at|date:"M j" }}
+                    <time datetime="{{ story.published_at|date:'c' }}">
+                        {{ story.published_at|date:"F j, Y" }}
                     </time>
 
                     <div class="news-content">
-                        <h3>{{ news.title }}</h3>
-
-                        {% if news.summary %}
-                            <p>{{ news.summary|truncatewords:18 }}</p>
+                        <h3> <a href="{{ story.get_absolute_url }}">
+                        {{ story.title }}
+                    </a></h3>
+                        
+                        {% if story.summary %}
+                            <p>{{ story.summary|truncatewords:18 }}</p>
                         {% endif %}
                     </div>
                 </article>
@@ -184,8 +154,9 @@
             {% for class_row in class_counts %}
 
                 <article class="class-card">
+                    
                     <div class="class-card__icon-wrap">
-
+                        <a class="class-card" href="{% url 'guild:roster' %}?class={{ class_row.slug }}">
                         <img
                             class="class-card__icon"
                             src="{% static 'guild/images/classes/' %}{{ class_row.label|lower }}.png"
@@ -202,6 +173,7 @@
                         >
                             {{ class_row.total }}
                         </span>
+                    </a>
                     </div>
 
                     <h3>

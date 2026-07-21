@@ -17,6 +17,17 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "DJANGO_CSRF_TRUSTED_ORIGINS",
+        "",
+    ).split(",")
+    if origin.strip()
+]
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -26,16 +37,36 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "ninja",
     "guild",
+
+    # Wagtail
+    "wagtail.contrib.forms",
+    "wagtail.contrib.redirects",
+    "wagtail.embeds",
+    "wagtail.sites",
+    "wagtail.users",
+    "wagtail.snippets",
+    "wagtail.documents",
+    "wagtail.images",
+    "wagtail.search",
+    "wagtail.admin",
+    "wagtail",
+
+    # Wagtail dependency
+    "taggit",    
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+
+     "wagtail.contrib.redirects.middleware.RedirectMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -108,3 +139,7 @@ LOGIN_REDIRECT_URL = "guild:home"
 LOGOUT_REDIRECT_URL = "guild:home"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+WAGTAIL_SITE_NAME = "Loot & Some Fun"
+
+WAGTAILADMIN_BASE_URL = "https://www.lootandsomefun.com"

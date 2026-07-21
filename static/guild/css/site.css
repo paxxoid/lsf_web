@@ -1441,6 +1441,9 @@ input, select, textarea {
 
 .footer-feature__content {
     min-width: 0;
+    align-items: left;
+    justify-content: left;
+    
 }
 
 .footer-feature h2 {

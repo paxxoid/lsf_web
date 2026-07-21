@@ -1,0 +1,49 @@
+{% extends "guild/base.html" %}
+
+{% load wagtailcore_tags wagtailimages_tags %}
+
+{% block title %}
+{{ story.title }} · Loot & Some Fun
+{% endblock %}
+
+{% block content %}
+<section class="content-shell">
+    <article class="panel article-page">
+        <header class="article-page__header">
+            <time datetime="{{ story.published_at|date:'c' }}">
+                {{ story.published_at|date:"F j, Y" }}
+            </time>
+
+            <h1>{{ story.title }}</h1>
+
+            {% if story.summary %}
+                <p class="page-intro">
+                    {{ story.summary }}
+                </p>
+            {% endif %}
+        </header>
+
+        {% if story.featured_image %}
+            {% image story.featured_image fill-1200x650 as article_image %}
+
+            <img
+                src="{{ article_image.url }}"
+                width="{{ article_image.width }}"
+                height="{{ article_image.height }}"
+                alt="{{ story.title }}"
+                class="article-page__image"
+            >
+        {% endif %}
+
+        <div class="rich-text">
+            {{ story.body|richtext }}
+        </div>
+
+        <footer class="article-page__footer">
+            <a href="{% url 'guild:news' %}">
+                ← Back to Guild News
+            </a>
+        </footer>
+    </article>
+</section>
+{% endblock %}

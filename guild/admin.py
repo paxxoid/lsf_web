@@ -43,11 +43,32 @@ class RaidAttendanceAdmin(admin.ModelAdmin):
 
 @admin.register(GuildNews)
 class GuildNewsAdmin(admin.ModelAdmin):
-    list_display = ("title", "published_at", "published", "pinned")
-    list_filter = ("published", "pinned", "published_at")
-    search_fields = ("title", "summary", "body")
-    prepopulated_fields = {"slug": ("title",)}
+    list_display = (
+        "title",
+        "published_at",
+        "is_published",
+        "featured",
+    )
 
+    list_filter = (
+        "is_published",
+        "featured",
+        "published_at",
+    )
+
+    search_fields = (
+        "title",
+        "summary",
+        "body",
+    )
+
+    prepopulated_fields = {
+        "slug": ("title",),
+    }
+
+    ordering = (
+        "-published_at",
+    )
 
 @admin.register(Screenshot)
 class ScreenshotAdmin(admin.ModelAdmin):

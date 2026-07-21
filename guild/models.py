@@ -6,6 +6,12 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+from django.urls import reverse
+
+from wagtail.admin.panels import FieldPanel
+from wagtail.fields import RichTextField
+
+
 
 
 class EverQuestClass(models.TextChoices):
@@ -33,12 +39,25 @@ class RaidAttendance(models.Model):
     raid_event = models.ForeignKey("RaidEvent", on_delete=models.CASCADE, related_name="attendances")
     member = models.ForeignKey("GuildMember", on_delete=models.CASCADE, related_name="raid_attendances")
     attended = models.BooleanField(default=False)
+    arrival_time = models.DateTimeField(
+        null=True,
+        blank=True,
+    )    
     notes = models.TextField(blank=True)
 
     class Meta:
         unique_together = ("raid_event", "member")
         ordering = ["raid_event__start_at", "member__character_name"]
 
+    @property
+    def is_late(self):
+        if not self.attended or self.arrival_time is None:
+            return False
+
+        late_cutoff = self.raid_event.start_at + timedelta(minutes=5)
+
+        return self.arrival_time > late_cutoff
+    
     def __str__(self):
         return f"{self.member} @ {self.raid_event}"
 
@@ -141,34 +160,80 @@ class LootRecord(models.Model):
     def __str__(self):
         return f"{self.item_name} → {self.member}"
 
-
 class GuildNews(models.Model):
-    title = models.CharField(max_length=160)
-    slug = models.SlugField(max_length=180, unique=True, blank=True)
-    summary = models.CharField(max_length=280)
-    body = models.TextField(blank=True)
-    published_at = models.DateTimeField(default=timezone.now)
-    published = models.BooleanField(default=True)
-    pinned = models.BooleanField(default=False)
+    title = models.CharField(
+        max_length=200,
+    )
+
+    slug = models.SlugField(
+        max_length=220,
+        unique=True,
+        help_text="Used in the public news story URL.",
+    )
+
+    summary = models.CharField(
+        max_length=400,
+        blank=True,
+        help_text="Short description shown on the homepage and news listing.",
+    )
+
+    body = RichTextField(
+        blank=True,
+    )
+
+    featured_image = models.ForeignKey(
+        "wagtailimages.Image",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    published_at = models.DateTimeField(
+        default=timezone.now,
+    )
+
+    is_published = models.BooleanField(
+        default=False,
+    )
+
+    featured = models.BooleanField(
+        default=False,
+        help_text="Show this story more prominently on the homepage.",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    panels = [
+        FieldPanel("title"),
+        FieldPanel("slug"),
+        FieldPanel("summary"),
+        FieldPanel("featured_image"),
+        FieldPanel("body"),
+        FieldPanel("published_at"),
+        FieldPanel("is_published"),
+        FieldPanel("featured"),
+    ]
 
     class Meta:
-        ordering = ["-pinned", "-published_at"]
-        verbose_name_plural = "Guild news"
-
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            base = slugify(self.title) or "news"
-            candidate = base
-            suffix = 2
-            while GuildNews.objects.exclude(pk=self.pk).filter(slug=candidate).exists():
-                candidate = f"{base}-{suffix}"
-                suffix += 1
-            self.slug = candidate
-        super().save(*args, **kwargs)
+        ordering = ["-published_at"]
+        verbose_name = "Guild news story"
+        verbose_name_plural = "Guild news stories"
 
     def __str__(self):
         return self.title
 
+    def get_absolute_url(self):
+        return reverse(
+            "guild:news_detail",
+            kwargs={"slug": self.slug},
+        )
 
 class Screenshot(models.Model):
     title = models.CharField(max_length=120)

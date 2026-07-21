@@ -1,15 +1,63 @@
-{% extends 'guild/base.html' %}
-{% block title %}Guild News · Loot & Some Fun{% endblock %}
+{% extends "guild/base.html" %}
+
+{% load wagtailimages_tags %}
+
+{% block title %}
+Guild News · Loot & Some Fun
+{% endblock %}
+
 {% block content %}
-<section class="content-shell page-header"><h1>Guild News</h1><p>Announcements, progression updates, and community news.</p></section>
-<section class="content-shell card-list">
-{% for news in news_items %}
-    <article class="panel event-card">
-        <time>{{ news.published_at|date:'F j, Y' }}</time>
-        <h2>{{ news.title }}</h2>
-        <p>{{ news.summary }}</p>
-        {% if news.body %}<div>{{ news.body|linebreaks }}</div>{% endif %}
-    </article>
-{% empty %}<article class="panel"><p>No news has been published.</p></article>{% endfor %}
+<section class="content-shell">
+    <header class="panel page-heading">
+        <h1>Guild News</h1>
+        <p>Announcements, accomplishments, and updates from Loot & Some Fun.</p>
+    </header>
+
+    <div class="news-grid">
+        {% for story in stories %}
+            <article class="panel news-card">
+                {% if story.featured_image %}
+                    {% image story.featured_image fill-800x450 as card_image %}
+
+                    <a href="{{ story.get_absolute_url }}">
+                        <img
+                            src="{{ card_image.url }}"
+                            width="{{ card_image.width }}"
+                            height="{{ card_image.height }}"
+                            alt="{{ story.title }}"
+                            class="news-card__image"
+                        >
+                    </a>
+                {% endif %}
+
+                <div class="news-card__content">
+                    <time datetime="{{ story.published_at|date:'c' }}">
+                        {{ story.published_at|date:"F j, Y" }}
+                    </time>
+
+                    <h2>
+                        <a href="{{ story.get_absolute_url }}">
+                            {{ story.title }}
+                        </a>
+                    </h2>
+
+                    {% if story.summary %}
+                        <p>{{ story.summary }}</p>
+                    {% endif %}
+
+                    <a
+                        href="{{ story.get_absolute_url }}"
+                        class="button-link"
+                    >
+                        Read Story
+                    </a>
+                </div>
+            </article>
+        {% empty %}
+            <article class="panel">
+                <p>No guild news has been published yet.</p>
+            </article>
+        {% endfor %}
+    </div>
 </section>
 {% endblock %}
