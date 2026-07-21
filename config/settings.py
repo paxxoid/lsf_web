@@ -38,6 +38,8 @@ INSTALLED_APPS = [
     "ninja",
     "guild",
 
+    "django_q",
+
     # Wagtail
     "wagtail.contrib.forms",
     "wagtail.contrib.redirects",
@@ -143,3 +145,43 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 WAGTAIL_SITE_NAME = "Loot & Some Fun"
 
 WAGTAILADMIN_BASE_URL = "https://www.lootandsomefun.com"
+
+
+
+Q_CLUSTER = {
+    # Display name for this cluster
+    "name": "loot-and-some-fun",
+
+    # Number of simultaneous task workers
+    "workers": 2,
+
+    # Restart each worker after this many tasks
+    "recycle": 500,
+
+    # Kill a task if it runs longer than 5 minutes
+    "timeout": 300,
+
+    # Must be longer than timeout
+    "retry": 420,
+
+    # Stop repeatedly failing tasks
+    "max_attempts": 3,
+
+    # Keep the internal queue reasonably small
+    "queue_limit": 50,
+
+    # Number of successful task records to retain
+    "save_limit": 250,
+
+    # Do not execute every missed occurrence after an outage
+    "catch_up": False,
+
+    # Use your existing MariaDB database as the broker
+    "orm": "default",
+
+    # Use the project timezone
+    "time_zone": TIME_ZONE,
+
+    # Django Admin section label
+    "label": "Scheduled Tasks",
+}
