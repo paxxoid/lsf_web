@@ -34,30 +34,100 @@ class EverQuestClass(models.TextChoices):
     
 
 
-
 class RaidAttendance(models.Model):
-    raid_event = models.ForeignKey("RaidEvent", on_delete=models.CASCADE, related_name="attendances")
-    member = models.ForeignKey("GuildMember", on_delete=models.CASCADE, related_name="raid_attendances")
+    raid_event = models.ForeignKey(
+        "RaidEvent",
+        on_delete=models.CASCADE,
+        related_name="attendances",
+    )
+
+    member = models.ForeignKey(
+        "GuildMember",
+        on_delete=models.CASCADE,
+        related_name="raid_attendances",
+    )
+
     attended = models.BooleanField(default=False)
+
     arrival_time = models.DateTimeField(
         null=True,
         blank=True,
-    )    
+    )
+
     notes = models.TextField(blank=True)
 
     class Meta:
-        unique_together = ("raid_event", "member")
-        ordering = ["raid_event__start_at", "member__character_name"]
+        unique_together = (
+            "raid_event",
+            "member",
+        )
+
+        ordering = [
+            "raid_event__start_at",
+            "member__character_name",
+        ]
+
+    @property
+    def raid_date(self):
+        return timezone.localtime(
+            self.raid_event.start_at
+        ).date()
 
     @property
     def is_late(self):
         if not self.attended or self.arrival_time is None:
             return False
 
-        late_cutoff = self.raid_event.start_at + timedelta(minutes=5)
+        late_cutoff = (
+            self.raid_event.start_at
+            + timedelta(minutes=5)
+        )
 
         return self.arrival_time > late_cutoff
-    
+
+    def save(self, *args, **kwargs):
+        previous_member_id = None
+
+        if self.pk:
+            previous_member_id = (
+                RaidAttendance.objects
+                .filter(pk=self.pk)
+                .values_list(
+                    "member_id",
+                    flat=True,
+                )
+                .first()
+            )
+
+        super().save(*args, **kwargs)
+
+        self.member.update_last_raid_attended()
+
+        if (
+            previous_member_id
+            and previous_member_id != self.member_id
+        ):
+            previous_member = GuildMember.objects.filter(
+                pk=previous_member_id,
+            ).first()
+
+            if previous_member:
+                previous_member.update_last_raid_attended()
+
+    def delete(self, *args, **kwargs):
+        member_id = self.member_id
+
+        result = super().delete(*args, **kwargs)
+
+        member = GuildMember.objects.filter(
+            pk=member_id,
+        ).first()
+
+        if member:
+            member.update_last_raid_attended()
+
+        return result
+
     def __str__(self):
         return f"{self.member} @ {self.raid_event}"
 
@@ -73,12 +143,17 @@ class GuildMember(models.Model):
         OFFICER = "officer", "Officer"
         LEADER = "leader", "Guild Leader"
 
-    character_name = models.CharField(max_length=64, unique=True)
+    character_name = models.CharField(
+        max_length=64,
+        unique=True,
+    )
+
     character_type = models.CharField(
         max_length=8,
         choices=CharacterType.choices,
         default=CharacterType.MAIN,
     )
+
     main_character = models.ForeignKey(
         "self",
         blank=True,
@@ -86,18 +161,65 @@ class GuildMember(models.Model):
         on_delete=models.SET_NULL,
         related_name="alternate_characters",
     )
-    class_name = models.CharField(max_length=24, choices=EverQuestClass.choices)
-    race = models.CharField(max_length=40, blank=True)
+
+    class_name = models.CharField(
+        max_length=24,
+        choices=EverQuestClass.choices,
+    )
+
+    race = models.CharField(
+        max_length=40,
+        blank=True,
+    )
+
     level = models.PositiveSmallIntegerField(
         default=1,
-        validators=[MinValueValidator(1), MaxValueValidator(65)],
+        validators=[
+            MinValueValidator(1),
+            MaxValueValidator(65),
+        ],
     )
-    rank = models.CharField(max_length=16, choices=Rank.choices, default=Rank.MEMBER)
+
+    rank = models.CharField(
+        max_length=16,
+        choices=Rank.choices,
+        default=Rank.MEMBER,
+    )
+
     active = models.BooleanField(default=True)
     raider = models.BooleanField(default=False)
     featured = models.BooleanField(default=False)
-    joined_at = models.DateField(default=timezone.localdate)
+
+    joined_at = models.DateField(
+        default=timezone.localdate,
+    )
+
     bio = models.TextField(blank=True)
+
+    last_raid_attended = models.DateTimeField(
+        blank=True,
+        null=True,
+    )
+
+    def update_last_raid_attended(self):
+        latest_raid = (
+            self.raid_attendances
+            .filter(attended=True)
+            .order_by("-raid_event__start_at")
+            .values_list(
+                "raid_event__start_at",
+                flat=True,
+            )
+            .first()
+        )
+
+        GuildMember.objects.filter(
+            pk=self.pk,
+        ).update(
+            last_raid_attended=latest_raid,
+        )
+
+        self.last_raid_attended = latest_raid
 
     class Meta:
         ordering = ["character_name"]
@@ -126,39 +248,59 @@ class RaidEvent(models.Model):
     def __str__(self):
         return f"{self.title} — {self.start_at:%Y-%m-%d}"
 
-
 class LootRecord(models.Model):
-    awarded_at = models.DateTimeField(default=timezone.now)
-    member = models.ForeignKey(GuildMember, on_delete=models.PROTECT, related_name="loot_records")
-    item_name = models.CharField(max_length=160)
-   # toon_type = models.CharField(max_length=8, choices=GuildMember.CharacterType.choices)
+    raid_event = models.ForeignKey(
+        "RaidEvent",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="loot_records",
+    )
+
+    awarded_at = models.DateTimeField(
+        default=timezone.now,
+    )
+
+    member = models.ForeignKey(
+        GuildMember,
+        on_delete=models.PROTECT,
+        related_name="loot_records",
+    )
+
+    item_name = models.CharField(
+        max_length=160,
+    )
+
     toon_type = models.CharField(
         max_length=8,
         choices=GuildMember.CharacterType.choices,
         editable=False,
-        #default=GuildMember.CharacterType.,
-    )   
-    zone = models.CharField(max_length=120, blank=True)
-    npc = models.CharField(max_length=120, blank=True)
-    notes = models.TextField(blank=True)
+    )
+
+    zone = models.CharField(
+        max_length=120,
+        blank=True,
+    )
+
+    npc = models.CharField(
+        max_length=120,
+        blank=True,
+    )
+
+    notes = models.TextField(
+        blank=True,
+    )
 
     class Meta:
         ordering = ["-awarded_at"]
-        indexes = [
-            models.Index(fields=["-awarded_at"]),
-            models.Index(fields=["item_name"]),
-            models.Index(fields=["member"]),
-            models.Index(fields=["toon_type"]),
-        ]
-    def save(self, *args, **kwargs):
-        if self._state.adding and self.member_id:
-            self.toon_type = self.member.character_type
 
+    def save(self, *args, **kwargs):
+        self.toon_type = self.member.character_type
         super().save(*args, **kwargs)
 
-
     def __str__(self):
-        return f"{self.item_name} → {self.member}"
+        raid_text = self.raid_event.title if self.raid_event else "No raid"
+        return f"{self.member} — {self.item_name} — {raid_text}"
 
 class GuildNews(models.Model):
     title = models.CharField(

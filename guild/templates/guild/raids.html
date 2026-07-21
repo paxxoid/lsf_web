@@ -1,15 +1,117 @@
-{% extends 'guild/base.html' %}
-{% block title %}Raids · Loot & Some Fun{% endblock %}
+{% extends "guild/base.html" %}
+
+{% block title %}
+Raids · Loot & Some Fun
+{% endblock %}
+
 {% block content %}
-<section class="content-shell page-header"><h1>Raid Schedule</h1><p>Upcoming public raids and guild events.</p></section>
-<section class="content-shell card-list">
-{% for event in events %}
-    <article class="panel event-card">
-        <time>{{ event.start_at|date:'l, F j, Y · g:i A' }}</time>
-        <h2>{{ event.title }}</h2>
-        <p><strong>Zone:</strong> {{ event.zone|default:'To be announced' }}</p>
-        <p>{{ event.description|default:'Details will be posted by the raid leader.' }}</p>
-    </article>
-{% empty %}<article class="panel"><p>No upcoming events are currently listed.</p></article>{% endfor %}
+
+<section class="content-shell page-header">
+    <h1>Raid Schedule</h1>
+    <p>Upcoming public raids and guild events.</p>
 </section>
+
+<section class="content-shell">
+    <div class="section-heading">
+        <h2>Upcoming Raids</h2>
+    </div>
+
+    <div class="card-list">
+        {% for event in upcoming_events %}
+            <article class="panel event-card">
+                <time datetime="{{ event.start_at|date:'c' }}">
+                    {{ event.start_at|date:"l, F j, Y · g:i A" }}
+                </time>
+
+                <h2>{{ event.title }}</h2>
+
+                <p>
+                    <strong>Zone:</strong>
+                    {{ event.zone|default:"To be announced" }}
+                </p>
+
+                <p>
+                    {{ event.description|default:"Details will be posted by the raid leader." }}
+                </p>
+            </article>
+        {% empty %}
+            <article class="panel">
+                <p>No upcoming events are currently listed.</p>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="content-shell raid-history">
+    <div class="section-heading">
+        <h2>Historical Raids</h2>
+        <p>Previously completed guild events.</p>
+    </div>
+
+    <div class="card-list">
+        {% for event in past_page %}
+            <article class="panel event-card event-card--historical">
+                <a
+                    href="{% url 'guild:raid_detail' event.id %}"
+                    class="event-card__link"
+                >
+                <time datetime="{{ event.start_at|date:'c' }}">
+                    {{ event.start_at|date:"l, F j, Y · g:i A" }}
+                </time>
+
+                <h2>{{ event.title }}</h2>
+
+                <p>
+                    <strong>Zone:</strong>
+                    {{ event.zone|default:"Not listed" }}
+                </p>
+
+                <p>
+                    {{ event.description|default:"No additional raid details were recorded." }}
+                </p>
+                </a>
+            </article>
+        {% empty %}
+            <article class="panel">
+                <p>No historical raids are currently available.</p>
+            </article>
+        {% endfor %}
+    </div>
+
+    {% if past_page.paginator.num_pages > 1 %}
+        <nav class="pagination" aria-label="Historical raid pages">
+            {% if past_page.has_previous %}
+                <a
+                    class="pagination__link"
+                    href="?page={{ past_page.previous_page_number }}"
+                >
+                    ← Previous
+                </a>
+            {% else %}
+                <span class="pagination__link pagination__link--disabled">
+                    ← Previous
+                </span>
+            {% endif %}
+
+            <span class="pagination__status">
+                Page {{ past_page.number }}
+                of {{ past_page.paginator.num_pages }}
+            </span>
+
+            {% if past_page.has_next %}
+                <a
+                    class="pagination__link"
+                    href="?page={{ past_page.next_page_number }}"
+                >
+                    Next →
+                </a>
+            {% else %}
+                <span class="pagination__link pagination__link--disabled">
+                    Next →
+                </span>
+            {% endif %}
+        </nav>
+    {% endif %}
+</section>
+
 {% endblock %}

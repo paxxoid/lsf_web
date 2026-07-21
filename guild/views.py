@@ -4,6 +4,8 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, render
+from django.core.paginator import Paginator
+
 
 
 from .forms import GuildApplicationForm
@@ -58,6 +60,34 @@ def home(request):
 def about(request):
     return render(request, "guild/about.html")
 
+def raid_detail(request, raid_id):
+    raid = get_object_or_404(
+        RaidEvent,
+        pk=raid_id,
+    )
+
+    attendance_records = (
+        raid.attendances
+        .select_related("member")
+        .order_by("member__character_name")
+    )
+
+    loot_records = (
+        raid.loot_records
+        .select_related("member")
+        .order_by("-awarded_at")
+    )
+
+    return render(
+        request,
+        "guild/raid_detail.html",
+        {
+            "raid": raid,
+            "attendance_records": attendance_records,
+            "loot_records": loot_records,
+        },
+    ) 
+
 
 def roster(request):
     members = GuildMember.objects.filter(active=True).select_related("main_character")
@@ -72,9 +102,32 @@ def roster(request):
 
 
 def raids(request):
-    events = RaidEvent.objects.filter(public=True, end_at__gte=timezone.now())
-    return render(request, "guild/raids.html", {"events": events})
+    now = timezone.now()
 
+    upcoming_events = (
+        RaidEvent.objects
+        .filter(start_at__gte=now)
+        .order_by("start_at")
+    )
+
+    past_events = (
+        RaidEvent.objects
+        .filter(start_at__lt=now)
+        .order_by("-start_at")
+    )
+
+    paginator = Paginator(past_events, 5)
+    page_number = request.GET.get("page")
+    past_page = paginator.get_page(page_number)
+
+    return render(
+        request,
+        "guild/raids.html",
+        {
+            "upcoming_events": upcoming_events,
+            "past_page": past_page,
+        },
+    )
 
 def loot(request):
     search_query = request.GET.get("q", "").strip()

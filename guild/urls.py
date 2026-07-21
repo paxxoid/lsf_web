@@ -26,4 +26,11 @@ urlpatterns = [
         views.news_detail,
         name="news_detail",
     ),    
+
+    path(
+        "raids/<int:raid_id>/",
+        views.raid_detail,
+        name="raid_detail",
+    ),
+
 ]

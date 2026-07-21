@@ -10,6 +10,7 @@ from wagtail.documents import urls as wagtaildocs_urls
 
 
 
+from guild import views
 from guild.api import api
 
 urlpatterns = [
@@ -23,7 +24,7 @@ urlpatterns = [
     # Wagtail document delivery
     path("documents/", include(wagtaildocs_urls)),    
 
-  
+ 
 
     path("", include("guild.urls")),
 ]

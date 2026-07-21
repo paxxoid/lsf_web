@@ -1,0 +1,176 @@
+{% extends "guild/base.html" %}
+
+{% block title %}
+{{ raid.title }} · Raid History
+{% endblock %}
+
+{% block content %}
+
+<section class="content-shell page-header">
+    <a href="{% url 'guild:raids' %}" class="back-link">
+        ← Back to Raid Schedule
+    </a>
+
+    <h1>{{ raid.title }}</h1>
+
+    <p>
+        {{ raid.start_at|date:"l, F j, Y · g:i A" }}
+    </p>
+
+    <p>
+        <strong>Zone:</strong>
+        {{ raid.zone|default:"Not listed" }}
+    </p>
+
+    {% if raid.description %}
+        <p>{{ raid.description }}</p>
+    {% endif %}
+</section>
+
+<section class="content-shell">
+    <article class="panel">
+        <div class="section-heading">
+            <h2>Attendance</h2>
+            <p>
+                {{ attendance_records|length }}
+                attendance record{{ attendance_records|length|pluralize }}
+            </p>
+        </div>
+
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Character</th>
+                        <th>Class</th>
+                        <th>Attended</th>
+                        <th>Arrival Time</th>
+                        <th>Status</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for record in attendance_records %}
+                        <tr>
+                            <td>
+                                {{ record.member.character_name }}
+                            </td>
+
+                            <td>
+                                {{ record.member.get_class_name_display }}
+                            </td>
+
+                            <td>
+                                {% if record.attended %}
+                                    Yes
+                                {% else %}
+                                    No
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if record.arrival_time %}
+                                    {{ record.arrival_time|date:"g:i A" }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if not record.attended %}
+                                    <span class="status status--absent">
+                                        Absent
+                                    </span>
+                                {% elif record.is_late %}
+                                    <span class="status status--late">
+                                        Late
+                                    </span>
+                                {% else %}
+                                    <span class="status status--ontime">
+                                        On time
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {{ record.notes|default:"—" }}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6">
+                                No attendance has been recorded for this raid.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+</section>
+
+<section class="content-shell">
+    <article class="panel">
+        <div class="section-heading">
+            <h2>Loot Awarded</h2>
+            <p>
+                {{ loot_records|length }}
+                item{{ loot_records|length|pluralize }}
+            </p>
+        </div>
+
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Character</th>
+                        <th>Item</th>
+                        <th>Type</th>
+                        <th>NPC</th>
+                        <th>Awarded</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for loot in loot_records %}
+                        <tr>
+                            <td>
+                                {{ loot.member.character_name }}
+                            </td>
+
+                            <td>
+                                {{ loot.item_name }}
+                            </td>
+
+                            <td>
+                                {{ loot.get_toon_type_display }}
+                            </td>
+
+                            <td>
+                                {{ loot.npc|default:"—" }}
+                            </td>
+
+                            <td>
+                                {{ loot.awarded_at|date:"g:i A" }}
+                            </td>
+
+                            <td>
+                                {{ loot.notes|default:"—" }}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6">
+                                No loot has been assigned to this raid.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+</section>
+
+{% endblock %}
