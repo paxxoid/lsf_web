@@ -158,6 +158,16 @@ class GuildMemberOut(Schema):
     bio: str
     last_raid_attended: Optional[datetime] = None
 
+class LootRecordCreateOut(Schema):
+    raid_event_id: int
+    member_id: int
+    item_name: str
+    awarded_at: datetime
+    zone: str
+    npc: Optional[str] = None
+    notes:Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Serializers
 # ---------------------------------------------------------------------------
@@ -289,6 +299,17 @@ def health(request):
 # ---------------------------------------------------------------------------
 
 
+class LootCreate(Schema):
+    raid_event_id: int
+    member_id: int
+    item_name: str
+    awarded_at: datetime
+    zone: str
+    npc: Optional[str] = None
+    notes:Optional[str] = None
+        
+        
+
 class GuildMemberCreate(Schema):
     character_name: str
     character_type: str = GuildMember.CharacterType.MAIN
@@ -302,6 +323,9 @@ class GuildMemberCreate(Schema):
     featured: bool = False
     joined_at: Optional[date] = None
     bio: Optional[str] = ""
+
+
+
 
 @api.post(
     "/v1/members/create",
@@ -736,6 +760,75 @@ def update_loot(request, record_id: int, payload: LootRecordUpdate):
     record.save()
     record.refresh_from_db()
     return serialize_loot(record)
+
+@api.post(
+    "/v1/loot/create",
+    auth=api_key_auth,
+    response={201: LootRecordCreateOut},
+)
+def create_loot(request, payload: LootCreate):
+    require_permission(request, "loot:create")
+
+    data = payload.model_dump(exclude_unset=True)
+
+    member_id = data.pop("member_id")
+    raid_event_id = data.pop("raid_event_id")
+
+    try:
+        member = GuildMember.objects.get(pk=member_id)
+    except GuildMember.DoesNotExist:
+        raise HttpError(
+            404,
+            f"Guild member ID {member_id} was not found.",
+        )
+
+    try:
+        raid_event = RaidEvent.objects.get(pk=raid_event_id)
+    except RaidEvent.DoesNotExist:
+        raise HttpError(
+            404,
+            f"Raid event ID {raid_event_id} was not found.",
+        )
+
+    try:
+        with transaction.atomic():
+            loot = LootRecord(
+                member=member,
+                raid_event=raid_event,
+                **data,
+            )
+
+            loot.full_clean()
+            loot.save()
+
+            loot = (
+                LootRecord.objects
+                .select_related(
+                    "member",
+                    "raid_event",
+                )
+                .get(pk=loot.pk)
+            )
+
+    except ValidationError as exc:
+        errors = getattr(
+            exc,
+            "message_dict",
+            {"error": exc.messages},
+        )
+
+        raise HttpError(
+            400,
+            {
+                field: list(messages)
+                for field, messages in errors.items()
+            },
+        )
+
+    return Status(
+        201,
+        serialize_loot(loot),
+    )
 
 
 # ---------------------------------------------------------------------------
