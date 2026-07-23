@@ -682,84 +682,27 @@ def list_loot(
     require_permission(request, "loot:read")
     limit, offset = bounded_page(limit, offset)
 
-    queryset = LootRecord.objects.select_related("member", "raid_event")
+    queryset = (
+        LootRecord.objects
+        .select_related("member", "raid_event")
+        .order_by("-awarded_at")
+    )
+
     if raid_event_id is not None:
-        queryset = queryset.filter(raid_event_id=raid_event_id)
+        queryset = queryset.filter(
+            raid_event_id=raid_event_id
+        )
+
     if member_id is not None:
-        queryset = queryset.filter(member_id=member_id)
+        queryset = queryset.filter(
+            member_id=member_id
+        )
 
     return [
         serialize_loot(record)
         for record in queryset[offset:offset + limit]
     ]
 
-
-
-@api.get(
-    "/v1/loot/character/{character_name}",
-    auth=api_key_auth,
-)
-def get_loot_by_character_name(request, character_name: str):
-    require_permission(request, "loot:read")
-
-    member = get_object_or_404(
-        GuildMember,
-        character_name__iexact=character_name.strip(),
-    )
-
-    records = (
-        LootRecord.objects
-        .filter(member=member)
-        .select_related(
-            "member",
-            "raid_event",
-        )
-        .order_by("-awarded_at")
-    )
-
-    return [
-        serialize_loot(record)
-        for record in records
-    ]
-
-
-@api.get("/v1/loot/{record_id}", auth=api_key_auth)
-def get_loot(request, record_id: int):
-    require_permission(request, "loot:read")
-    record = get_object_or_404(
-        LootRecord.objects.select_related("member", "raid_event"),
-        pk=record_id,
-    )
-    return serialize_loot(record)
-
-
-@api.patch("/v1/loot/{record_id}", auth=api_key_auth)
-def update_loot(request, record_id: int, payload: LootRecordUpdate):
-    require_permission(request, "loot:update")
-    record = get_object_or_404(LootRecord, pk=record_id)
-    changes = payload.model_dump(exclude_unset=True)
-
-    if "member_id" in changes:
-        record.member = get_object_or_404(
-            GuildMember,
-            pk=changes.pop("member_id"),
-        )
-
-    if "raid_event_id" in changes:
-        raid_id = changes.pop("raid_event_id")
-        record.raid_event = (
-            get_object_or_404(RaidEvent, pk=raid_id)
-            if raid_id is not None
-            else None
-        )
-
-    for field, value in changes.items():
-        setattr(record, field, value)
-
-    record.full_clean()
-    record.save()
-    record.refresh_from_db()
-    return serialize_loot(record)
 
 @api.post(
     "/v1/loot/create",
@@ -769,26 +712,22 @@ def update_loot(request, record_id: int, payload: LootRecordUpdate):
 def create_loot(request, payload: LootCreate):
     require_permission(request, "loot:create")
 
-    data = payload.model_dump(exclude_unset=True)
+    data = payload.model_dump(
+        exclude_unset=True
+    )
 
     member_id = data.pop("member_id")
     raid_event_id = data.pop("raid_event_id")
 
-    try:
-        member = GuildMember.objects.get(pk=member_id)
-    except GuildMember.DoesNotExist:
-        raise HttpError(
-            404,
-            f"Guild member ID {member_id} was not found.",
-        )
+    member = get_object_or_404(
+        GuildMember,
+        pk=member_id,
+    )
 
-    try:
-        raid_event = RaidEvent.objects.get(pk=raid_event_id)
-    except RaidEvent.DoesNotExist:
-        raise HttpError(
-            404,
-            f"Raid event ID {raid_event_id} was not found.",
-        )
+    raid_event = get_object_or_404(
+        RaidEvent,
+        pk=raid_event_id,
+    )
 
     try:
         with transaction.atomic():
@@ -830,6 +769,118 @@ def create_loot(request, payload: LootCreate):
         serialize_loot(loot),
     )
 
+
+@api.get(
+    "/v1/loot/character/{character_name}",
+    auth=api_key_auth,
+)
+def get_loot_by_character_name(
+    request,
+    character_name: str,
+):
+    require_permission(request, "loot:read")
+
+    member = get_object_or_404(
+        GuildMember,
+        character_name__iexact=character_name.strip(),
+    )
+
+    records = (
+        LootRecord.objects
+        .filter(member=member)
+        .select_related(
+            "member",
+            "raid_event",
+        )
+        .order_by("-awarded_at")
+    )
+
+    return [
+        serialize_loot(record)
+        for record in records
+    ]
+
+
+@api.get(
+    "/v1/loot/{int:record_id}",
+    auth=api_key_auth,
+)
+def get_loot(request, record_id: int):
+    require_permission(request, "loot:read")
+
+    record = get_object_or_404(
+        LootRecord.objects.select_related(
+            "member",
+            "raid_event",
+        ),
+        pk=record_id,
+    )
+
+    return serialize_loot(record)
+
+
+@api.patch(
+    "/v1/loot/{int:record_id}",
+    auth=api_key_auth,
+)
+def update_loot(
+    request,
+    record_id: int,
+    payload: LootRecordUpdate,
+):
+    require_permission(request, "loot:update")
+
+    record = get_object_or_404(
+        LootRecord,
+        pk=record_id,
+    )
+
+    changes = payload.model_dump(
+        exclude_unset=True
+    )
+
+    if "member_id" in changes:
+        record.member = get_object_or_404(
+            GuildMember,
+            pk=changes.pop("member_id"),
+        )
+
+    if "raid_event_id" in changes:
+        raid_id = changes.pop("raid_event_id")
+
+        record.raid_event = (
+            get_object_or_404(
+                RaidEvent,
+                pk=raid_id,
+            )
+            if raid_id is not None
+            else None
+        )
+
+    for field, value in changes.items():
+        setattr(record, field, value)
+
+    try:
+        record.full_clean()
+        record.save()
+        record.refresh_from_db()
+
+    except ValidationError as exc:
+        errors = getattr(
+            exc,
+            "message_dict",
+            {"error": exc.messages},
+        )
+
+        raise HttpError(
+            400,
+            {
+                field: list(messages)
+                for field, messages in errors.items()
+            },
+        )
+
+    return serialize_loot(record)
 
 # ---------------------------------------------------------------------------
 # Guild news: select and update
