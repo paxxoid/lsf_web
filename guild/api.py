@@ -325,7 +325,9 @@ class GuildMemberCreate(Schema):
     joined_at: Optional[date] = None
     bio: Optional[str] = ""
 
-
+class RaidAttendanceAdd(Schema):
+    raid_event_id: int
+    character_names: list[str]
 
 
 @api.post(
@@ -630,7 +632,7 @@ def list_attendance(
     ]
 
 
-@api.get("/v1/attendance/{attendance_id}", auth=api_key_auth)
+@api.get("/v1/attendance/{int:attendance_id}", auth=api_key_auth)
 def get_attendance(request, attendance_id: int):
     require_permission(request, "attendance:read")
     record = get_object_or_404(
@@ -640,7 +642,7 @@ def get_attendance(request, attendance_id: int):
     return serialize_attendance(record)
 
 
-@api.patch("/v1/attendance/{attendance_id}", auth=api_key_auth)
+@api.patch("/v1/attendance/{int:attendance_id}", auth=api_key_auth)
 def update_attendance(
     request,
     attendance_id: int,
@@ -672,6 +674,138 @@ def update_attendance(
 
     record.refresh_from_db()
     return serialize_attendance(record)
+
+@api.post(
+    "/v1/attendance/add",
+    auth=api_key_auth,
+)
+def add_raid_attendance(
+    request,
+    payload: RaidAttendanceAdd,
+):
+    require_permission(request, "attendance:update")
+
+    raid_event = get_object_or_404(
+        RaidEvent,
+        pk=payload.raid_event_id,
+    )
+
+    # Remove empty names and duplicates while preserving
+    # case-insensitive matching.
+    requested_names = {
+        name.strip().casefold()
+        for name in payload.character_names
+        if name and name.strip()
+    }
+
+    if not requested_names:
+        return {
+            "raid_event_id": raid_event.id,
+            "raid_event": raid_event.title,
+            "added_count": 0,
+            "existing_count": 0,
+            "unknown_character_names": [],
+            "added_members": [],
+        }
+
+    # Get members and compare names case-insensitively.
+    members_by_name = {
+        member.character_name.casefold(): member
+        for member in GuildMember.objects.filter(
+            character_name__in=[
+                name.strip()
+                for name in payload.character_names
+                if name and name.strip()
+            ]
+        )
+    }
+
+    # MariaDB is normally case-insensitive, but this fallback
+    # guarantees matching if the database collation changes.
+    missing_lookups = requested_names - set(members_by_name)
+
+    if missing_lookups:
+        for member in GuildMember.objects.all():
+            normalized_name = member.character_name.casefold()
+
+            if normalized_name in missing_lookups:
+                members_by_name[normalized_name] = member
+
+    valid_members = [
+        members_by_name[name]
+        for name in requested_names
+        if name in members_by_name
+    ]
+
+    valid_member_ids = {
+        member.id
+        for member in valid_members
+    }
+
+    existing_member_ids = set(
+        RaidAttendance.objects.filter(
+            raid_event=raid_event,
+            member_id__in=valid_member_ids,
+        ).values_list(
+            "member_id",
+            flat=True,
+        )
+    )
+
+    new_members = [
+        member
+        for member in valid_members
+        if member.id not in existing_member_ids
+    ]
+
+    # if timezone.is_aware(raid_event.start_at):
+    #     raid_date = timezone.localtime(
+    #         raid_event.start_at
+    #     ).date()
+    # else:
+    #     raid_date = raid_event.start_at.date()
+
+    arrival_time = timezone.now()
+
+    new_records = [
+        RaidAttendance(
+            raid_event=raid_event,
+            #raid_date=raid_date,
+            member=member,
+            attended=True,
+            arrival_time=arrival_time,
+        )
+        for member in new_members
+    ]
+
+    with transaction.atomic():
+        RaidAttendance.objects.bulk_create(
+            new_records,
+            ignore_conflicts=True,
+        )
+
+    unknown_names = sorted(
+        original_name.strip()
+        for original_name in payload.character_names
+        if (
+            original_name
+            and original_name.strip()
+            and original_name.strip().casefold()
+            not in members_by_name
+        )
+    )
+
+    return {
+        "raid_event_id": raid_event.id,
+        "raid_event": raid_event.title,
+        "added_count": len(new_members),
+        "existing_count": len(existing_member_ids),
+        "unknown_character_names": unknown_names,
+        "added_members": sorted(
+            member.character_name
+            for member in new_members
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
