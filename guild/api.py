@@ -218,6 +218,7 @@ def serialize_attendance(record):
         "raid_event_id": record.raid_event_id,
         "raid_event": record.raid_event.title,
         "raid_date": record.raid_date,
+        "zone": record.raid_event.zone,
         "member_id": record.member_id,
         "member": record.member.character_name,
         "class_name": record.member.class_name,
@@ -599,6 +600,7 @@ def list_attendance(
     raid_event_id: Optional[int] = None,
     member_id: Optional[int] = None,
     attended: Optional[bool] = None,
+    zone: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
 ):
@@ -616,6 +618,11 @@ def list_attendance(
         queryset = queryset.filter(member_id=member_id)
     if attended is not None:
         queryset = queryset.filter(attended=attended)
+
+    if zone:
+        queryset = queryset.filter(
+            raid_event__zone__iexact=zone.strip()
+        )        
 
     return [
         serialize_attendance(record)
