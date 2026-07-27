@@ -8,6 +8,7 @@ from django.core.paginator import Paginator
 
 
 
+
 from .forms import GuildApplicationForm
 from .models import (
     EverQuestClass,

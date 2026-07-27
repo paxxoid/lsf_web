@@ -10,6 +10,7 @@ from ninja.security import APIKeyHeader
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from ninja.errors import HttpError
+from quarm_reference.routes import router as quarm_router
 
 
 from .models import (
@@ -51,6 +52,8 @@ api = NinjaAPI(
     title="Loot and Some Fun API",
     version="1.1.0",
 )
+
+
 
 
 def require_permission(request, permission):
@@ -1123,3 +1126,10 @@ def update_application(
     application.full_clean()
     application.save()
     return serialize_application(application)
+
+
+api.add_router(
+    "/v1/quarm",
+    quarm_router,
+    auth=api_key_auth,  
+)

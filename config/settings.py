@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "ninja",
     "guild",
+    #"quarm_reference",
+    "quarm_reference.apps.QuarmReferenceConfig",
 
     "django_q",
 
@@ -115,8 +117,32 @@ DATABASES = {
         },
 
         "CONN_MAX_AGE": 60,
+    },
+    "quarm": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": os.environ["QUARM_DB_NAME"],
+        "USER": os.environ["QUARM_DB_USER"],
+        "PASSWORD": os.environ["QUARM_DB_PASSWORD"],
+        "HOST": os.environ["QUARM_DB_HOST"],
+        "PORT": os.environ.get("QUARM_DB_PORT", "3306"),
+        "CONN_MAX_AGE": int(
+            os.environ.get("QUARM_DB_CONN_MAX_AGE", "60")
+        ),
+        "CONN_HEALTH_CHECKS": True,
+        "OPTIONS": {
+            "charset": "utf8mb4",
+        },
     }
 }
+
+QUARM_REFERENCE_DATABASE_ALIAS = "quarm"
+
+DATABASE_ROUTERS = [
+    *globals().get("DATABASE_ROUTERS", []),
+    "quarm_reference.database_router.QuarmDatabaseRouter",
+]
+
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
