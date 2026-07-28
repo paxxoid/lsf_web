@@ -22,6 +22,7 @@ class NPCSummarySchema(Schema):
     max_level: int | None = None
     race: str | None = None
     npc_class_id: int | None = None
+    npc_class_name: str
 
 
 class CombatSchema(Schema):
