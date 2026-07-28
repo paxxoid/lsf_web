@@ -1,6 +1,8 @@
 from ninja import Router
 from ninja.errors import HttpError
 
+from guild.permissions import require_permission
+
 from .schemas import (
     ErrorSchema,
     HealthSchema,
@@ -15,6 +17,7 @@ from .services.npcs import (
     get_npc_detail,
     get_npc_loot,
     get_npcs_by_name,
+    get_npc_names_for_zone,
     search_npcs,
 )
 from .services.queries import database_health, list_zones, search_items
@@ -165,3 +168,32 @@ def item_search(
 )
 def zones(request):
     return list_zones()
+
+
+@router.get("/npcs-simple")
+def list_npcs(
+    request,
+    zone: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    require_permission(request, "quarm:npcs:read")
+    _validate_paging(limit, offset)
+
+    clean_zone = zone.strip()
+
+    if not clean_zone:
+        raise HttpError(
+            422,
+            "zone cannot be blank",
+        )
+
+    names = get_npc_names_for_zone(
+        clean_zone,
+    )
+
+    return {
+        "zone": clean_zone,
+        "count": len(names),
+        "names": names,
+    }

@@ -11,6 +11,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from ninja.errors import HttpError
 from quarm_reference.routes import router as quarm_router
+from .permissions import require_permission
 
 
 from .models import (
@@ -56,9 +57,9 @@ api = NinjaAPI(
 
 
 
-def require_permission(request, permission):
-    if not request.auth or not request.auth.has_permission(permission):
-        raise HttpError(403, f"API key lacks permission: {permission}")
+# def require_permission(request, permission):
+#     if not request.auth or not request.auth.has_permission(permission):
+#         raise HttpError(403, f"API key lacks permission: {permission}")
 
 
 def bounded_page(limit, offset):

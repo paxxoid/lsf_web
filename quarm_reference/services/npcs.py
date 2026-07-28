@@ -165,3 +165,30 @@ def get_npc_loot(npc_id: int) -> list[dict] | None:
     except QuarmNPC.DoesNotExist:
         return None
     return get_loot_for_table(npc.loottable_id)
+
+def get_npc_names_for_zone(zone: str) -> list[str]:
+    clean_zone = zone.strip()
+
+    if not clean_zone:
+        return []
+
+    queryset = (
+        _queryset()
+        .filter(
+            Q(zone_code__iexact=clean_zone)
+            | Q(zone_name__iexact=clean_zone)
+        )
+        .only("name")
+        .order_by("name")
+    )
+
+    names = {
+        npc.display_name.strip()
+        for npc in queryset
+        if npc.display_name and npc.display_name.strip()
+    }
+
+    return sorted(
+        names,
+        key=str.casefold,
+    )

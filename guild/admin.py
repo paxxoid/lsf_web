@@ -35,6 +35,10 @@ API_PERMISSION_CHOICES = [
     ("applications:read", "Applications — View"),
     ("applications:update", "Applications — Update"),
 
+    # Quarm reference database
+    ("quarm:npcs:read", "Quarm NPCs — View"),
+    ("quarm:npcs:bulk", "Quarm NPCs — Bulk download"),
+
     ("admin", "Administrator — All permissions"),
 ]
 
