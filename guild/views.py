@@ -253,3 +253,51 @@ def build_class_roster_counts() -> list[dict]:
         }
         for class_value, class_label in EverQuestClass.choices
     ]
+
+
+def member_summary(request, member_id):
+    member = get_object_or_404(
+        GuildMember.objects.select_related("main_character"),
+        id=member_id,
+    )
+
+    # Determine the main character so all known alts can be displayed.
+    main_character = member.main_character or member
+
+    known_alts = (
+        GuildMember.objects
+        .filter(main_character=main_character)
+        .order_by("character_name")
+    )
+
+    attended_raids = (
+        RaidAttendance.objects
+        .select_related("raid_event")
+        .filter(
+            member=member,
+            attended=True,
+        )
+        .order_by("-raid_event__start_at")
+    )
+
+    loot_records = (
+        LootRecord.objects
+        .filter(member=member)
+        .order_by("-awarded_at")
+    )
+
+    context = {
+        "member": member,
+        "main_character": main_character,
+        "known_alts": known_alts,
+        "attended_raids": attended_raids,
+        "loot_records": loot_records,
+        "attendance_count": attended_raids.count(),
+        "loot_count": loot_records.count(),
+    }
+
+    return render(
+        request,
+        "guild/member_summary.html",
+        context,
+    )

@@ -8,7 +8,7 @@
     <tbody>
     {% for member in members %}
         <tr>
-            <td>{{ member.character_name }}</td>
+            <td><a href="{% url 'guild:member_summary' member.id %}"> {{ member.character_name }}</a></td>
             <td>{{ member.get_class_name_display }}</td>
             <td>{{ member.level }}</td>
             <td>{{ member.race|default:'—' }}</td>

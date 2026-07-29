@@ -32,5 +32,10 @@ urlpatterns = [
         views.raid_detail,
         name="raid_detail",
     ),
+    path(
+        "members/<int:member_id>/",
+        views.member_summary,
+        name="member_summary",
+    ),
 
 ]

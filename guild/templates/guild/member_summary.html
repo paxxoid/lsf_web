@@ -1,0 +1,258 @@
+{% extends "guild/base.html" %}
+
+{% block title %}
+    {{ member.character_name }} - Member Summary
+{% endblock %}
+
+{% block content %}
+<div class="member-summary-page">
+
+    <div class="member-summary-header">
+        <div class="member-title">
+            <h1>{{ member.character_name }}</h1>
+
+            <div class="member-subtitle">
+                Level {{ member.level }}
+                {{ member.get_class_name_display }}
+            </div>
+        </div>
+
+        <div class="member-summary-grid">
+            <div class="member-stat">
+                <span class="stat-label">Character Type</span>
+                <span class="stat-value">
+                    {{ member.get_character_type_display }}
+                </span>
+            </div>
+
+            <div class="member-stat">
+                <span class="stat-label">Rank</span>
+                <span class="stat-value">
+                    {{ member.get_rank_display }}
+                </span>
+            </div>
+
+            <div class="member-stat">
+                <span class="stat-label">Joined</span>
+                <span class="stat-value">
+                    {% if member.joined_at %}
+                        {{ member.joined_at|date:"F j, Y" }}
+                    {% else %}
+                        Unknown
+                    {% endif %}
+                </span>
+            </div>
+
+            <div class="member-stat">
+                <span class="stat-label">Status</span>
+                <span class="stat-value">
+                    {% if member.active %}
+                        Active
+                    {% else %}
+                        Inactive
+                    {% endif %}
+                </span>
+            </div>
+
+            <div class="member-stat">
+                <span class="stat-label">Raids Attended</span>
+                <span class="stat-value">
+                    {{ attendance_count }}
+                </span>
+            </div>
+
+            <div class="member-stat">
+                <span class="stat-label">Items Looted</span>
+                <span class="stat-value">
+                    {{ loot_count }}
+                </span>
+            </div>
+        </div>
+
+        {% if member.main_character %}
+            <div class="main-character-notice">
+                Main Character:
+                <a href="{% url 'guild:member_summary' member.main_character.id %}">
+                    {{ member.main_character.character_name }}
+                </a>
+            </div>
+        {% endif %}
+    </div>
+
+
+    <section class="member-section">
+        <div class="section-heading">
+            <h2>Known Alts</h2>
+            <span class="record-count">
+                {{ known_alts|length }}
+            </span>
+        </div>
+
+        {% if known_alts %}
+            <div class="alt-grid">
+                {% for alt in known_alts %}
+                    <a
+                        class="alt-card"
+                        href="{% url 'guild:member_summary' alt.id %}"
+                    >
+                        <strong>{{ alt.character_name }}</strong>
+
+                        <span>
+                            Level {{ alt.level }}
+                            {{ alt.get_class_name_display }}
+                        </span>
+
+                        <span>
+                            {% if alt.active %}
+                                Active
+                            {% else %}
+                                Inactive
+                            {% endif %}
+                        </span>
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-message">
+                No known alts are currently assigned.
+            </div>
+        {% endif %}
+    </section>
+
+
+    <section class="member-section">
+        <div class="section-heading">
+            <h2>Attended Raids</h2>
+            <span class="record-count">
+                {{ attendance_count }}
+            </span>
+        </div>
+
+        <div class="member-table-scroll">
+            <table class="member-table">
+                <thead>
+                    <tr>
+                        <th>Raid Date</th>
+                        <th>Raid</th>
+                        <th>Arrival Time</th>
+                        <th>Late</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for attendance in attended_raids %}
+                        <tr>
+                            <td>
+                                {{ attendance.raid_event.start_at|date:"M j, Y" }}
+                            </td>
+
+                            <td>
+                                {{ attendance.raid_event }}
+                            </td>
+
+                            <td>
+                                {% if attendance.arrival_time %}
+                                    {{ attendance.arrival_time|date:"g:i A" }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if attendance.is_late %}
+                                    Yes
+                                {% else %}
+                                    No
+                                {% endif %}
+                            </td>
+
+                            <td class="notes-column">
+                                {{ attendance.notes|default:"—" }}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" class="empty-table-cell">
+                                No attended raids were found for this member.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+
+    <section class="member-section">
+        <div class="section-heading">
+            <h2>Loot History</h2>
+            <span class="record-count">
+                {{ loot_count }}
+            </span>
+        </div>
+
+        <div class="member-table-scroll loot-table-scroll">
+            <table class="member-table">
+                <thead>
+                    <tr>
+                        <th>Awarded</th>
+                        <th>Item</th>
+                        <th>Zone</th>
+                        <th>NPC</th>
+                        <th>Character Type</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for record in loot_records %}
+                        <tr>
+                            <td>
+                                {{ record.awarded_at|date:"M j, Y g:i A" }}
+                            </td>
+
+                            <td class="item-name-column">
+                                {% if record.item_url %}
+                                    <a
+                                        href="{{ record.item_url }}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        {{ record.item_name }}
+                                    </a>
+                                {% else %}
+                                    {{ record.item_name }}
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {{ record.zone|default:"—" }}
+                            </td>
+
+                            <td>
+                                {{ record.npc|default:"—" }}
+                            </td>
+
+                            <td>
+                                {{ record.toon_type|default:"—"|title }}
+                            </td>
+
+                            <td class="notes-column">
+                                {{ record.notes|default:"—" }}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="empty-table-cell">
+                                No loot records were found for this member.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+{% endblock %}
