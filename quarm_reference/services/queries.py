@@ -230,3 +230,152 @@ def search_items(
         if row["drop_chance"] is not None:
             row["drop_chance"] = round(float(row["drop_chance"]), 4)
     return total, rows
+
+
+def resolve_item_reference(
+    item_name: str,
+    *,
+    zone: str | None = None,
+) -> dict[str, Any] | None:
+    """
+    Resolve one Quarm item using its exact name and optional zone.
+
+    Returns:
+        {
+            "item_id": 123,
+            "item_name": "Armguard of Shadows",
+        }
+
+    Returns None when no match exists.
+
+    Raises ValueError if the same name/zone combination resolves
+    to multiple distinct item IDs.
+    """
+
+    clean_name = item_name.strip()
+
+    if not clean_name:
+        return None
+
+    where = [
+        "LOWER(d.`Item_Name`) = LOWER(%s)",
+    ]
+    params: list[Any] = [clean_name]
+
+    if zone and zone.strip():
+        clean_zone = zone.strip()
+
+        where.append(
+            """
+            (
+                LOWER(n.`Zone_Code`) = LOWER(%s)
+                OR LOWER(n.`Zone_Name`) = LOWER(%s)
+            )
+            """
+        )
+
+        params.extend([
+            clean_zone,
+            clean_zone,
+        ])
+
+    sql = f"""
+        SELECT DISTINCT
+            d.`Item_ID` AS item_id,
+            d.`Item_Name` AS item_name
+        FROM `NPC_Drops` AS d
+        INNER JOIN `NPC` AS n
+            ON n.`Loottable_ID` = d.`Loottable_ID`
+        WHERE {" AND ".join(where)}
+        ORDER BY d.`Item_ID`
+    """
+
+    with connections[get_database_alias()].cursor() as cursor:
+        cursor.execute(sql, params)
+
+        rows = [
+            {
+                "item_id": row[0],
+                "item_name": row[1],
+            }
+            for row in cursor.fetchall()
+        ]
+
+    valid_rows = [
+        row
+        for row in rows
+        if row["item_id"] is not None
+    ]
+
+    if not valid_rows:
+        return None
+
+    item_ids = {
+        int(row["item_id"])
+        for row in valid_rows
+    }
+
+    if len(item_ids) > 1:
+        raise ValueError(
+            f"Multiple Quarm item IDs match "
+            f"'{clean_name}' in zone '{zone}': "
+            f"{sorted(item_ids)}"
+        )
+
+    # Use the canonical spelling stored in Quarm.
+    return {
+        "item_id": valid_rows[0]["item_id"],
+        "item_name": valid_rows[0]["item_name"],
+    }
+
+
+def get_item_reference(item_id: int) -> dict | None:
+    sql = """
+        SELECT
+            d.`Item_ID` AS item_id,
+            d.`Item_Name` AS item_name,
+            d.`Drop_Chance` AS drop_chance,
+            n.`ID` AS npc_id,
+            n.`Name` AS npc_name,
+            n.`Zone_Code` AS zone_code,
+            n.`Zone_Name` AS zone_name
+        FROM `NPC_Drops` AS d
+        LEFT JOIN `NPC` AS n
+            ON n.`Loottable_ID` = d.`Loottable_ID`
+        WHERE d.`Item_ID` = %s
+        ORDER BY
+            n.`Zone_Name`,
+            n.`Name`,
+            d.`Drop_Chance` DESC
+    """
+
+    with connections[get_database_alias()].cursor() as cursor:
+        cursor.execute(sql, [item_id])
+        rows = _dict_fetchall(cursor)
+
+    if not rows:
+        return None
+
+    first = rows[0]
+
+    return {
+        "item_id": first["item_id"],
+        "item_name": first["item_name"],
+        "drops": [
+            {
+                "npc_id": row["npc_id"],
+                "npc_name": display_npc_name(
+                    row["npc_name"],
+                ),
+                "zone_code": row["zone_code"],
+                "zone_name": row["zone_name"],
+                "drop_chance": (
+                    float(row["drop_chance"])
+                    if row["drop_chance"] is not None
+                    else None
+                ),
+            }
+            for row in rows
+        ],
+    }
+

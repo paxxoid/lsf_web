@@ -266,6 +266,12 @@ class LootRecord(models.Model):
         on_delete=models.PROTECT,
         related_name="loot_records",
     )
+    
+    item_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
 
     item_name = models.CharField(
         max_length=160,

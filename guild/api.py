@@ -11,8 +11,11 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from ninja.errors import HttpError
 from quarm_reference.routes import router as quarm_router
+from quarm_reference.services.items import get_item_by_id
 from .permissions import require_permission
-
+from quarm_reference.services.queries import (
+    resolve_item_reference,
+)
 
 from .models import (
     ApiKey,
@@ -109,6 +112,7 @@ class LootRecordUpdate(Schema):
     raid_event_id: Optional[int] = None
     member_id: Optional[int] = None
     item_name: Optional[str] = None
+    item_name: Optional[str] = None
     awarded_at: Optional[datetime] = None
     zone: Optional[str] = None
     npc: Optional[str] = None
@@ -165,6 +169,8 @@ class GuildMemberOut(Schema):
 class LootRecordCreateOut(Schema):
     raid_event_id: int
     member_id: int
+    item_id: Optional[int] = None
+    item_url: Optional[str] = None
     item_name: str
     awarded_at: datetime
     zone: str
@@ -234,7 +240,25 @@ def serialize_attendance(record):
     }
 
 
-def serialize_loot(record):
+def serialize_loot(
+    record,
+    *,
+    request=None,
+):
+    item_url = None
+
+    if record.item_id:
+        relative_url = (
+            f"/api/v1/quarm/items/"
+            f"{record.item_id}"
+        )
+
+        item_url = (
+            request.build_absolute_uri(relative_url)
+            if request
+            else relative_url
+        )
+
     return {
         "id": record.id,
         "raid_event_id": record.raid_event_id,
@@ -245,9 +269,13 @@ def serialize_loot(record):
         ),
         "member_id": record.member_id,
         "member": record.member.character_name,
+        "item_id": record.item_id,
+        "item_url": item_url,
         "item_name": record.item_name,
         "toon_type": record.toon_type,
-        "toon_type_display": record.get_toon_type_display(),
+        "toon_type_display": (
+            record.get_toon_type_display()
+        ),
         "zone": record.zone,
         "npc": record.npc,
         "notes": record.notes,
@@ -307,6 +335,7 @@ def health(request):
 class LootCreate(Schema):
     raid_event_id: int
     member_id: int
+    item_id: Optional[int] = None
     item_name: str
     awarded_at: datetime
     zone: str
@@ -847,8 +876,6 @@ def list_loot(
         serialize_loot(record)
         for record in queryset[offset:offset + limit]
     ]
-
-
 @api.post(
     "/v1/loot/create",
     auth=api_key_auth,
@@ -858,7 +885,7 @@ def create_loot(request, payload: LootCreate):
     require_permission(request, "loot:create")
 
     data = payload.model_dump(
-        exclude_unset=True
+        exclude_unset=True,
     )
 
     member_id = data.pop("member_id")
@@ -873,6 +900,34 @@ def create_loot(request, payload: LootCreate):
         RaidEvent,
         pk=raid_event_id,
     )
+
+    submitted_item_name = data["item_name"].strip()
+    submitted_zone = data.get("zone", "").strip()
+
+    try:
+        item_reference = resolve_item_reference(
+            submitted_item_name,
+            zone=submitted_zone,
+        )
+    except ValueError as error:
+        raise HttpError(
+            409,
+            str(error),
+        ) from error
+
+    if item_reference is None:
+        raise HttpError(
+            422,
+            (
+                f"No Quarm item named "
+                f"'{submitted_item_name}' was found "
+                f"in zone '{submitted_zone}'."
+            ),
+        )
+
+    # Store both the external ID and canonical name.
+    data["item_id"] = item_reference["item_id"]
+    data["item_name"] = item_reference["item_name"]
 
     try:
         with transaction.atomic():
@@ -907,13 +962,15 @@ def create_loot(request, payload: LootCreate):
                 field: list(messages)
                 for field, messages in errors.items()
             },
-        )
+        ) from exc
 
     return Status(
         201,
-        serialize_loot(loot),
+        serialize_loot(
+            loot,
+            request=request,
+        ),
     )
-
 
 @api.get(
     "/v1/loot/character/{character_name}",

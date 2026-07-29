@@ -20,7 +20,7 @@ from .services.npcs import (
     get_npc_names_for_zone,
     search_npcs,
 )
-from .services.queries import database_health, list_zones, search_items
+from .services.queries import database_health, list_zones, search_items, get_item_reference
 
 
 router = Router(tags=["Quarm Reference"])
@@ -159,6 +159,26 @@ def item_search(
         "offset": offset,
         "results": results,
     }
+
+@router.get("/items/{int:item_id}")
+def item_by_id(
+    request,
+    item_id: int,
+):
+    require_permission(
+        request,
+        "quarm:npcs:read",
+    )
+
+    item = get_item_reference(item_id)
+
+    if item is None:
+        raise HttpError(
+            404,
+            f"Quarm item {item_id} was not found.",
+        )
+
+    return item
 
 
 @router.get(
