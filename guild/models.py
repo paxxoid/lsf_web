@@ -276,7 +276,7 @@ class LootRecord(models.Model):
     item_name = models.CharField(
         max_length=160,
     )
-
+    
     toon_type = models.CharField(
         max_length=8,
         choices=GuildMember.CharacterType.choices,
@@ -297,6 +297,13 @@ class LootRecord(models.Model):
         blank=True,
     )
 
+    @property
+    def item_url(self):
+        if self.item_id is None:
+            return None
+
+        return f"https://www.pqdi.cc/item/{self.item_id}"
+    
     class Meta:
         ordering = ["-awarded_at"]
 
@@ -307,6 +314,8 @@ class LootRecord(models.Model):
     def __str__(self):
         raid_text = self.raid_event.title if self.raid_event else "No raid"
         return f"{self.member} — {self.item_name} — {raid_text}"
+    
+    
 
 class GuildNews(models.Model):
     title = models.CharField(

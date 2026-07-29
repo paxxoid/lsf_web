@@ -254,7 +254,8 @@ def serialize_loot(
         )
 
         item_url = (
-            request.build_absolute_uri(relative_url)
+            #request.build_absolute_uri(relative_url) #for LSF API
+            f"https://www.pqdi.cc/item/{record.item_id}" # for pqdi
             if request
             else relative_url
         )
