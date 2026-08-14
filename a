@@ -1,0 +1,24 @@
+from django.db import transaction
+from guild.models import GuildMember, LootRecord, RaidAttendance, RaidEvent
+
+try:
+    with transaction.atomic():
+        deleted_loot = LootRecord.objects.all().delete()
+        deleted_attendance = RaidAttendance.objects.all().delete()
+        deleted_raids = RaidEvent.objects.all().delete()
+
+        deleted_alts = GuildMember.objects.filter(
+            main_character__isnull=False
+        ).delete()
+
+        deleted_members = GuildMember.objects.all().delete()
+
+except Exception as exc:
+    print("Deletion failed:", type(exc).__name__, exc)
+
+else:
+    print("Loot deleted:", deleted_loot)
+    print("Attendance deleted:", deleted_attendance)
+    print("Raids deleted:", deleted_raids)
+    print("Alts deleted:", deleted_alts)
+    print("Members deleted:", deleted_members)

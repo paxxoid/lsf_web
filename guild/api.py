@@ -587,7 +587,7 @@ def update_member(request, member_id: int, payload: GuildMemberUpdate):
 @api.get("/v1/raids", auth=api_key_auth)
 def list_raids(
     request,
-    limit: int = 100,
+    limit: int = 5000,
     offset: int = 0,
     public: Optional[bool] = None,
     status: Optional[str] = None,
@@ -637,7 +637,7 @@ def list_attendance(
     member_id: Optional[int] = None,
     attended: Optional[bool] = None,
     zone: Optional[str] = None,
-    limit: int = 100,
+    limit: int = 5000,
     offset: int = 0,
 ):
     require_permission(request, "attendance:read")
@@ -851,7 +851,7 @@ def list_loot(
     request,
     raid_event_id: Optional[int] = None,
     member_id: Optional[int] = None,
-    limit: int = 100,
+    limit: int = 5000,
     offset: int = 0,
 ):
     require_permission(request, "loot:read")
@@ -1094,7 +1094,7 @@ def update_loot(
 def list_news(
     request,
     published: Optional[bool] = None,
-    limit: int = 100,
+    limit: int = 5000,
     offset: int = 0,
 ):
     require_permission(request, "news:read")
@@ -1141,7 +1141,7 @@ def update_news(request, news_id: int, payload: GuildNewsUpdate):
 def list_applications(
     request,
     status: Optional[str] = None,
-    limit: int = 100,
+    limit: int = 5000,
     offset: int = 0,
 ):
     require_permission(request, "applications:read")
