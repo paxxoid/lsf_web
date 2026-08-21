@@ -1,4 +1,5 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone as dt_timezone
+from zoneinfo import ZoneInfo
 from typing import Optional
 
 from django.shortcuts import get_object_or_404
@@ -90,6 +91,22 @@ class GuildMemberUpdate(Schema):
     last_raid_attended: Optional[datetime] = None
 
 
+class RaidEventCreate(Schema):
+    title: str
+    zone: str = ""
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    description: str = ""
+    status: str = RaidEvent.Status.SCHEDULED
+    public: bool = True
+
+    # Friendly input: allow specifying date + time in EST (e.g. for users)
+    start_date: Optional[date] = None
+    start_time_est: Optional[str] = None  # expected HH:MM or HH:MM:SS
+    end_date: Optional[date] = None
+    end_time_est: Optional[str] = None
+
+
 class RaidEventUpdate(Schema):
     title: Optional[str] = None
     zone: Optional[str] = None
@@ -98,6 +115,11 @@ class RaidEventUpdate(Schema):
     description: Optional[str] = None
     status: Optional[str] = None
     public: Optional[bool] = None
+    # Friendly input for updates as well
+    start_date: Optional[date] = None
+    start_time_est: Optional[str] = None
+    end_date: Optional[date] = None
+    end_time_est: Optional[str] = None
 
 
 class RaidAttendanceUpdate(Schema):
@@ -584,6 +606,89 @@ def update_member(request, member_id: int, payload: GuildMemberUpdate):
 # Raid events: select and update
 # ---------------------------------------------------------------------------
 
+@api.post(
+    "/v1/raids/create",
+    auth=api_key_auth,
+    response={201: dict},
+)
+def create_raid(request, payload: RaidEventCreate):
+    require_permission(request, "raids:create")
+
+    data = payload.model_dump(exclude_unset=True)
+    # Support user-friendly EST date+time inputs. If provided, combine
+    # and convert to UTC for storage.
+    def _combine_est(d: Optional[date], t: Optional[str], field_name: str):
+        if d is None and t is None:
+            return None
+        if d is None or not t:
+            raise HttpError(400, {field_name: ["Both date and time must be provided together."]})
+
+        parsed_time = None
+        for fmt in ("%H:%M:%S", "%H:%M"):
+            try:
+                parsed_time = datetime.strptime(t, fmt).time()
+                break
+            except Exception:
+                continue
+
+        if parsed_time is None:
+            raise HttpError(400, {field_name: ["Time must be in HH:MM or HH:MM:SS format."]})
+
+        ny = ZoneInfo("America/New_York")
+        naive_dt = datetime.combine(d, parsed_time)
+        est_dt = naive_dt.replace(tzinfo=ny)
+        return est_dt.astimezone(dt_timezone.utc)
+
+    # start
+    if "start_date" in data or "start_time_est" in data:
+        start_dt = _combine_est(
+            data.pop("start_date", None),
+            data.pop("start_time_est", None),
+            "start",
+        )
+        data["start_at"] = start_dt
+
+    # end
+    if "end_date" in data or "end_time_est" in data:
+        end_dt = _combine_est(
+            data.pop("end_date", None),
+            data.pop("end_time_est", None),
+            "end",
+        )
+        data["end_at"] = end_dt
+    # Ensure we have start_at and end_at after processing friendly inputs
+    if data.get("start_at") is None:
+        raise HttpError(400, {"start_at": ["This field may not be blank."]})
+    if data.get("end_at") is None:
+        raise HttpError(400, {"end_at": ["This field may not be blank."]})
+    title = data.get("title", "").strip()
+    if not title:
+        raise HttpError(400, {"title": ["This field may not be blank."]})
+
+    data["title"] = title
+
+    try:
+        with transaction.atomic():
+            event = RaidEvent(**data)
+            event.full_clean()
+            event.save()
+    except ValidationError as exc:
+        errors = getattr(
+            exc,
+            "message_dict",
+            {"error": exc.messages},
+        )
+        raise HttpError(
+            400,
+            {
+                field: list(messages)
+                for field, messages in errors.items()
+            },
+        ) from exc
+
+    return Status(201, serialize_raid(event))
+
+
 @api.get("/v1/raids", auth=api_key_auth)
 def list_raids(
     request,
@@ -618,7 +723,50 @@ def update_raid(request, raid_id: int, payload: RaidEventUpdate):
     require_permission(request, "raids:update")
     event = get_object_or_404(RaidEvent, pk=raid_id)
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+
+    # Support EST friendly inputs for updates as well
+    def _combine_est_update(d: Optional[date], t: Optional[str], field_name: str):
+        if d is None and t is None:
+            return None
+        if d is None or not t:
+            raise HttpError(400, {field_name: ["Both date and time must be provided together."]})
+
+        parsed_time = None
+        for fmt in ("%H:%M:%S", "%H:%M"):
+            try:
+                parsed_time = datetime.strptime(t, fmt).time()
+                break
+            except Exception:
+                continue
+
+        if parsed_time is None:
+            raise HttpError(400, {field_name: ["Time must be in HH:MM or HH:MM:SS format."]})
+
+        ny = ZoneInfo("America/New_York")
+        naive_dt = datetime.combine(d, parsed_time)
+        est_dt = naive_dt.replace(tzinfo=ny)
+        return est_dt.astimezone(dt_timezone.utc)
+
+    if "start_date" in changes or "start_time_est" in changes:
+        start_dt = _combine_est_update(
+            changes.pop("start_date", None),
+            changes.pop("start_time_est", None),
+            "start",
+        )
+        if start_dt is not None:
+            changes["start_at"] = start_dt
+
+    if "end_date" in changes or "end_time_est" in changes:
+        end_dt = _combine_est_update(
+            changes.pop("end_date", None),
+            changes.pop("end_time_est", None),
+            "end",
+        )
+        if end_dt is not None:
+            changes["end_at"] = end_dt
+
+    for field, value in changes.items():
         setattr(event, field, value)
 
     event.full_clean()

@@ -21,6 +21,7 @@ API_PERMISSION_CHOICES = [
     ("members:update", "Members — Update"),
 
     ("raids:read", "Raids — View"),
+    ("raids:create", "Raids — Create"),
     ("raids:update", "Raids — Update"),
 
     ("attendance:read", "Attendance — View"),
