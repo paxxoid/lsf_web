@@ -54,6 +54,16 @@ class RaidAttendance(models.Model):
         blank=True,
     )
 
+    leave_time = models.DateTimeField(
+        null=True,
+        blank=True,
+    )    
+
+    total_raid_minutes = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )    
+
     notes = models.TextField(blank=True)
 
     class Meta:

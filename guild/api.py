@@ -384,6 +384,7 @@ class GuildMemberCreate(Schema):
 class RaidAttendanceAdd(Schema):
     raid_event_id: int
     character_names: list[str]
+    total_raid_minutes: Optional[dict[str, int]] = None
 
 
 @api.post(
@@ -856,7 +857,6 @@ def update_attendance(
 
     record.refresh_from_db()
     return serialize_attendance(record)
-
 @api.post(
     "/v1/attendance/add",
     auth=api_key_auth,
@@ -872,46 +872,81 @@ def add_raid_attendance(
         pk=payload.raid_event_id,
     )
 
-    # Remove empty names and duplicates while preserving
-    # case-insensitive matching.
+    now = timezone.now()
+
+    # ---------------------------------------------------------
+    # Normalize current raid roster
+    # ---------------------------------------------------------
+
     requested_names = {
         name.strip().casefold()
         for name in payload.character_names
         if name and name.strip()
     }
 
-    if not requested_names:
-        return {
-            "raid_event_id": raid_event.id,
-            "raid_event": raid_event.title,
-            "added_count": 0,
-            "existing_count": 0,
-            "unknown_character_names": [],
-            "added_members": [],
+    submitted_names = [
+        name.strip()
+        for name in payload.character_names
+        if name and name.strip()
+    ]
+
+    # ---------------------------------------------------------
+    # Normalize raw total raid minutes
+    #
+    # This data is NOT calculated from arrival/leave times.
+    # Whatever the client sends is what gets stored.
+    # ---------------------------------------------------------
+
+    minutes_by_name = {}
+
+    if payload.total_raid_minutes:
+        for name, minutes in payload.total_raid_minutes.items():
+
+            if minutes < 0:
+                raise HttpError(
+                    400,
+                    f"total_raid_minutes cannot be negative for '{name}'.",
+                )
+
+            minutes_by_name[
+                name.strip().casefold()
+            ] = minutes
+
+    # ---------------------------------------------------------
+    # Resolve roster names to GuildMember records
+    # ---------------------------------------------------------
+
+    members_by_name = {}
+
+    if submitted_names:
+        members_by_name = {
+            member.character_name.casefold(): member
+            for member in GuildMember.objects.filter(
+                character_name__in=submitted_names
+            )
         }
 
-    # Get members and compare names case-insensitively.
-    members_by_name = {
-        member.character_name.casefold(): member
-        for member in GuildMember.objects.filter(
-            character_name__in=[
-                name.strip()
-                for name in payload.character_names
-                if name and name.strip()
-            ]
+        # Fallback if DB collation is case-sensitive
+        missing_lookups = (
+            requested_names
+            - set(members_by_name)
         )
-    }
 
-    # MariaDB is normally case-insensitive, but this fallback
-    # guarantees matching if the database collation changes.
-    missing_lookups = requested_names - set(members_by_name)
+        if missing_lookups:
+            for member in GuildMember.objects.all():
 
-    if missing_lookups:
-        for member in GuildMember.objects.all():
-            normalized_name = member.character_name.casefold()
+                normalized_name = (
+                    member.character_name.casefold()
+                )
 
-            if normalized_name in missing_lookups:
-                members_by_name[normalized_name] = member
+                if normalized_name in missing_lookups:
+                    members_by_name[
+                        normalized_name
+                    ] = member
+
+    # ---------------------------------------------------------
+    # Current valid raid members
+    # ---------------------------------------------------------
 
     valid_members = [
         members_by_name[name]
@@ -919,52 +954,193 @@ def add_raid_attendance(
         if name in members_by_name
     ]
 
-    valid_member_ids = {
+    current_member_ids = {
         member.id
         for member in valid_members
     }
 
-    existing_member_ids = set(
-        RaidAttendance.objects.filter(
-            raid_event=raid_event,
-            member_id__in=valid_member_ids,
-        ).values_list(
-            "member_id",
-            flat=True,
-        )
+    current_members_by_id = {
+        member.id: member
+        for member in valid_members
+    }
+
+    # ---------------------------------------------------------
+    # Get ALL existing attendance records for this raid
+    #
+    # Required for:
+    #   - detecting departures
+    #   - detecting rejoins
+    #   - updating raw raid minutes
+    # ---------------------------------------------------------
+
+    existing_records = list(
+        RaidAttendance.objects
+        .filter(raid_event=raid_event)
+        .select_related("member")
     )
 
-    new_members = [
-        member
-        for member in valid_members
-        if member.id not in existing_member_ids
-    ]
+    existing_by_member_id = {
+        record.member_id: record
+        for record in existing_records
+    }
 
-    # if timezone.is_aware(raid_event.start_at):
-    #     raid_date = timezone.localtime(
-    #         raid_event.start_at
-    #     ).date()
-    # else:
-    #     raid_date = raid_event.start_at.date()
+    existing_member_ids = set(
+        existing_by_member_id
+    )
 
-    arrival_time = timezone.now()
+    # ---------------------------------------------------------
+    # NEW ARRIVALS
+    #
+    # Only process add/remove logic if a roster was supplied.
+    # ---------------------------------------------------------
 
-    new_records = [
-        RaidAttendance(
-            raid_event=raid_event,
-            #raid_date=raid_date,
-            member=member,
-            attended=True,
-            arrival_time=arrival_time,
+    new_members = []
+    new_records = []
+
+    if requested_names:
+
+        new_member_ids = (
+            current_member_ids
+            - existing_member_ids
         )
-        for member in new_members
-    ]
+
+        new_members = [
+            current_members_by_id[member_id]
+            for member_id in new_member_ids
+        ]
+
+        new_records = [
+            RaidAttendance(
+                raid_event=raid_event,
+                member=member,
+                attended=True,
+                arrival_time=now,
+                leave_time=None,
+
+                # Optional raw value from client
+                total_raid_minutes=(
+                    minutes_by_name.get(
+                        member.character_name.casefold()
+                    )
+                ),
+            )
+            for member in new_members
+        ]
+
+    # ---------------------------------------------------------
+    # MEMBERS WHO LEFT
+    #
+    # Existing attendance record
+    # + missing from current roster
+    # + leave_time not already set
+    #
+    # IMPORTANT:
+    # Empty character_names does NOT mark everyone as left.
+    # ---------------------------------------------------------
+
+    left_records = []
+
+    if requested_names:
+
+        for record in existing_records:
+
+            if (
+                record.member_id
+                not in current_member_ids
+                and record.leave_time is None
+            ):
+                record.leave_time = now
+                left_records.append(record)
+
+    # ---------------------------------------------------------
+    # MEMBERS WHO REJOINED
+    #
+    # Existing member is back in roster after having
+    # previously received a leave_time.
+    #
+    # We preserve original arrival_time and clear leave_time.
+    # ---------------------------------------------------------
+
+    rejoined_records = []
+
+    if requested_names:
+
+        for member_id in (
+            current_member_ids
+            & existing_member_ids
+        ):
+            record = existing_by_member_id[
+                member_id
+            ]
+
+            if record.leave_time is not None:
+                record.leave_time = None
+                rejoined_records.append(record)
+
+    # ---------------------------------------------------------
+    # RAW TOTAL RAID MINUTES
+    #
+    # Completely independent of add/remove/rejoin logic.
+    #
+    # Existing attendance records can receive minutes whether
+    # or not that member is in character_names.
+    # ---------------------------------------------------------
+
+    minutes_records = []
+
+    if minutes_by_name:
+
+        for record in existing_records:
+
+            member_name = (
+                record.member
+                .character_name
+                .casefold()
+            )
+
+            if member_name in minutes_by_name:
+
+                record.total_raid_minutes = (
+                    minutes_by_name[
+                        member_name
+                    ]
+                )
+
+                minutes_records.append(record)
+
+    # ---------------------------------------------------------
+    # Save everything
+    # ---------------------------------------------------------
 
     with transaction.atomic():
-        RaidAttendance.objects.bulk_create(
-            new_records,
-            ignore_conflicts=True,
-        )
+
+        if new_records:
+            RaidAttendance.objects.bulk_create(
+                new_records,
+                ignore_conflicts=True,
+            )
+
+        if left_records:
+            RaidAttendance.objects.bulk_update(
+                left_records,
+                ["leave_time"],
+            )
+
+        if rejoined_records:
+            RaidAttendance.objects.bulk_update(
+                rejoined_records,
+                ["leave_time"],
+            )
+
+        if minutes_records:
+            RaidAttendance.objects.bulk_update(
+                minutes_records,
+                ["total_raid_minutes"],
+            )
+
+    # ---------------------------------------------------------
+    # Unknown roster character names
+    # ---------------------------------------------------------
 
     unknown_names = sorted(
         original_name.strip()
@@ -972,24 +1148,81 @@ def add_raid_attendance(
         if (
             original_name
             and original_name.strip()
-            and original_name.strip().casefold()
+            and original_name
+            .strip()
+            .casefold()
             not in members_by_name
         )
     )
 
+    # ---------------------------------------------------------
+    # Existing players still in raid
+    # ---------------------------------------------------------
+
+    existing_present_ids = (
+        current_member_ids
+        & existing_member_ids
+    )
+
+    rejoined_member_ids = {
+        record.member_id
+        for record in rejoined_records
+    }
+
+    existing_present_ids -= rejoined_member_ids
+
+    # ---------------------------------------------------------
+    # Response
+    # ---------------------------------------------------------
+
     return {
         "raid_event_id": raid_event.id,
         "raid_event": raid_event.title,
-        "added_count": len(new_members),
-        "existing_count": len(existing_member_ids),
+
+        "added_count": len(new_records),
+        "existing_count": len(existing_present_ids),
+        "left_count": len(left_records),
+        "rejoined_count": len(rejoined_records),
+        "minutes_updated_count": (
+            len(minutes_records)
+            + sum(
+                1
+                for record in new_records
+                if record.total_raid_minutes is not None
+            )
+        ),
+
         "unknown_character_names": unknown_names,
+
         "added_members": sorted(
             member.character_name
             for member in new_members
         ),
+
+        "left_members": sorted(
+            record.member.character_name
+            for record in left_records
+        ),
+
+        "rejoined_members": sorted(
+            record.member.character_name
+            for record in rejoined_records
+        ),
+
+        "minutes_updated_members": sorted(
+            {
+                record.member.character_name
+                for record in minutes_records
+            }
+            |
+            {
+                record.member.character_name
+                for record in new_records
+                if record.total_raid_minutes
+                is not None
+            }
+        ),
     }
-
-
 # ---------------------------------------------------------------------------
 # Loot records: select and update
 # ---------------------------------------------------------------------------
