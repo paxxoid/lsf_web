@@ -385,6 +385,7 @@ class RaidAttendanceAdd(Schema):
     raid_event_id: int
     character_names: list[str]
     total_raid_minutes: Optional[dict[str, int]] = None
+    attendance_percent: Optional[dict[str, float]] = None
 
 
 @api.post(
@@ -857,6 +858,7 @@ def update_attendance(
 
     record.refresh_from_db()
     return serialize_attendance(record)
+
 @api.post(
     "/v1/attendance/add",
     auth=api_key_auth,
@@ -864,6 +866,40 @@ def update_attendance(
 def add_raid_attendance(
     request,
     payload: RaidAttendanceAdd,
+    summary="Add or update raid attendance",
+    description="""
+        Adds or updates attendance for a raid event.
+
+        ### Behavior
+
+        - New characters are added with `arrival_time` set to the current server time.
+        - Characters missing from the current roster receive a `leave_time`.
+        - Characters who rejoin have their `leave_time` cleared.
+        - `total_raid_minutes` is optional raw per-character data supplied by the client.
+        - `attendance_percent` is optional raw per-character data supplied by the client.
+        - `total_raid_minutes` and `attendance_percent` are **not calculated by the API**.
+        - An empty `character_names` list does not mark all members as having left.
+
+        ### Example payload
+
+        ```json
+        {
+        "raid_event_id": 10,
+        "character_names": [
+            "Paxxar",
+            "SuccorPunch"
+        ],
+        "total_raid_minutes": {
+            "Paxxar": 120,
+            "SuccorPunch": 9
+        },
+        "attendance_percent": {
+            "Paxxar": 100,
+            "SuccorPunch": 7.5
+        }
+        }
+
+        """,    
 ):
     require_permission(request, "attendance:update")
 
@@ -875,7 +911,7 @@ def add_raid_attendance(
     now = timezone.now()
 
     # ---------------------------------------------------------
-    # Normalize current raid roster
+    # CURRENT RAID ROSTER
     # ---------------------------------------------------------
 
     requested_names = {
@@ -891,34 +927,71 @@ def add_raid_attendance(
     ]
 
     # ---------------------------------------------------------
-    # Normalize raw total raid minutes
+    # RAW TOTAL RAID MINUTES
     #
-    # This data is NOT calculated from arrival/leave times.
-    # Whatever the client sends is what gets stored.
+    # No calculation is performed.
+    # Whatever the client sends is stored.
     # ---------------------------------------------------------
 
     minutes_by_name = {}
 
     if payload.total_raid_minutes:
+
         for name, minutes in payload.total_raid_minutes.items():
+
+            clean_name = name.strip().casefold()
+
+            if not clean_name:
+                continue
 
             if minutes < 0:
                 raise HttpError(
                     400,
-                    f"total_raid_minutes cannot be negative for '{name}'.",
+                    (
+                        "total_raid_minutes cannot be "
+                        f"negative for '{name}'."
+                    ),
                 )
 
-            minutes_by_name[
-                name.strip().casefold()
-            ] = minutes
+            minutes_by_name[clean_name] = minutes
 
     # ---------------------------------------------------------
-    # Resolve roster names to GuildMember records
+    # RAW ATTENDANCE PERCENT
+    #
+    # No calculation is performed.
+    # Whatever the client sends is stored.
+    # ---------------------------------------------------------
+
+    percent_by_name = {}
+
+    if payload.attendance_percent:
+
+        for name, percent in payload.attendance_percent.items():
+
+            clean_name = name.strip().casefold()
+
+            if not clean_name:
+                continue
+
+            if percent < 0 or percent > 100:
+                raise HttpError(
+                    400,
+                    (
+                        "attendance_percent must be between "
+                        f"0 and 100 for '{name}'."
+                    ),
+                )
+
+            percent_by_name[clean_name] = percent
+
+    # ---------------------------------------------------------
+    # RESOLVE CURRENT ROSTER NAMES
     # ---------------------------------------------------------
 
     members_by_name = {}
 
     if submitted_names:
+
         members_by_name = {
             member.character_name.casefold(): member
             for member in GuildMember.objects.filter(
@@ -926,13 +999,14 @@ def add_raid_attendance(
             )
         }
 
-        # Fallback if DB collation is case-sensitive
+        # Fallback for case-sensitive database collations.
         missing_lookups = (
             requested_names
             - set(members_by_name)
         )
 
         if missing_lookups:
+
             for member in GuildMember.objects.all():
 
                 normalized_name = (
@@ -945,7 +1019,7 @@ def add_raid_attendance(
                     ] = member
 
     # ---------------------------------------------------------
-    # Current valid raid members
+    # VALID CURRENT RAID MEMBERS
     # ---------------------------------------------------------
 
     valid_members = [
@@ -965,12 +1039,13 @@ def add_raid_attendance(
     }
 
     # ---------------------------------------------------------
-    # Get ALL existing attendance records for this raid
+    # GET ALL EXISTING ATTENDANCE FOR THIS RAID
     #
-    # Required for:
-    #   - detecting departures
-    #   - detecting rejoins
-    #   - updating raw raid minutes
+    # We need every attendance row so we can:
+    #   - detect departures
+    #   - detect rejoins
+    #   - update minutes
+    #   - update attendance percentage
     # ---------------------------------------------------------
 
     existing_records = list(
@@ -990,8 +1065,6 @@ def add_raid_attendance(
 
     # ---------------------------------------------------------
     # NEW ARRIVALS
-    #
-    # Only process add/remove logic if a roster was supplied.
     # ---------------------------------------------------------
 
     new_members = []
@@ -1017,9 +1090,14 @@ def add_raid_attendance(
                 arrival_time=now,
                 leave_time=None,
 
-                # Optional raw value from client
                 total_raid_minutes=(
                     minutes_by_name.get(
+                        member.character_name.casefold()
+                    )
+                ),
+
+                attendance_percent=(
+                    percent_by_name.get(
                         member.character_name.casefold()
                     )
                 ),
@@ -1030,12 +1108,8 @@ def add_raid_attendance(
     # ---------------------------------------------------------
     # MEMBERS WHO LEFT
     #
-    # Existing attendance record
-    # + missing from current roster
-    # + leave_time not already set
-    #
-    # IMPORTANT:
-    # Empty character_names does NOT mark everyone as left.
+    # Only run leave detection when character_names contains
+    # a roster. An empty roster will NOT mark everyone left.
     # ---------------------------------------------------------
 
     left_records = []
@@ -1055,10 +1129,10 @@ def add_raid_attendance(
     # ---------------------------------------------------------
     # MEMBERS WHO REJOINED
     #
-    # Existing member is back in roster after having
-    # previously received a leave_time.
+    # If they are back in the roster and previously had a
+    # leave_time, clear leave_time.
     #
-    # We preserve original arrival_time and clear leave_time.
+    # Original arrival_time remains unchanged.
     # ---------------------------------------------------------
 
     rejoined_records = []
@@ -1069,6 +1143,7 @@ def add_raid_attendance(
             current_member_ids
             & existing_member_ids
         ):
+
             record = existing_by_member_id[
                 member_id
             ]
@@ -1080,10 +1155,7 @@ def add_raid_attendance(
     # ---------------------------------------------------------
     # RAW TOTAL RAID MINUTES
     #
-    # Completely independent of add/remove/rejoin logic.
-    #
-    # Existing attendance records can receive minutes whether
-    # or not that member is in character_names.
+    # Completely independent of roster add/remove logic.
     # ---------------------------------------------------------
 
     minutes_records = []
@@ -1109,7 +1181,35 @@ def add_raid_attendance(
                 minutes_records.append(record)
 
     # ---------------------------------------------------------
-    # Save everything
+    # RAW ATTENDANCE PERCENT
+    #
+    # Completely independent of roster add/remove logic.
+    # ---------------------------------------------------------
+
+    percent_records = []
+
+    if percent_by_name:
+
+        for record in existing_records:
+
+            member_name = (
+                record.member
+                .character_name
+                .casefold()
+            )
+
+            if member_name in percent_by_name:
+
+                record.attendance_percent = (
+                    percent_by_name[
+                        member_name
+                    ]
+                )
+
+                percent_records.append(record)
+
+    # ---------------------------------------------------------
+    # SAVE
     # ---------------------------------------------------------
 
     with transaction.atomic():
@@ -1138,8 +1238,14 @@ def add_raid_attendance(
                 ["total_raid_minutes"],
             )
 
+        if percent_records:
+            RaidAttendance.objects.bulk_update(
+                percent_records,
+                ["attendance_percent"],
+            )
+
     # ---------------------------------------------------------
-    # Unknown roster character names
+    # UNKNOWN CHARACTER NAMES FROM ROSTER
     # ---------------------------------------------------------
 
     unknown_names = sorted(
@@ -1156,7 +1262,7 @@ def add_raid_attendance(
     )
 
     # ---------------------------------------------------------
-    # Existing players still in raid
+    # EXISTING MEMBERS STILL PRESENT
     # ---------------------------------------------------------
 
     existing_present_ids = (
@@ -1172,7 +1278,23 @@ def add_raid_attendance(
     existing_present_ids -= rejoined_member_ids
 
     # ---------------------------------------------------------
-    # Response
+    # NEW RECORDS THAT RECEIVED RAW VALUES
+    # ---------------------------------------------------------
+
+    new_minutes_members = {
+        record.member.character_name
+        for record in new_records
+        if record.total_raid_minutes is not None
+    }
+
+    new_percent_members = {
+        record.member.character_name
+        for record in new_records
+        if record.attendance_percent is not None
+    }
+
+    # ---------------------------------------------------------
+    # RESPONSE
     # ---------------------------------------------------------
 
     return {
@@ -1183,13 +1305,15 @@ def add_raid_attendance(
         "existing_count": len(existing_present_ids),
         "left_count": len(left_records),
         "rejoined_count": len(rejoined_records),
+
         "minutes_updated_count": (
             len(minutes_records)
-            + sum(
-                1
-                for record in new_records
-                if record.total_raid_minutes is not None
-            )
+            + len(new_minutes_members)
+        ),
+
+        "attendance_percent_updated_count": (
+            len(percent_records)
+            + len(new_percent_members)
         ),
 
         "unknown_character_names": unknown_names,
@@ -1214,15 +1338,18 @@ def add_raid_attendance(
                 record.member.character_name
                 for record in minutes_records
             }
-            |
+            | new_minutes_members
+        ),
+
+        "attendance_percent_updated_members": sorted(
             {
                 record.member.character_name
-                for record in new_records
-                if record.total_raid_minutes
-                is not None
+                for record in percent_records
             }
+            | new_percent_members
         ),
     }
+
 # ---------------------------------------------------------------------------
 # Loot records: select and update
 # ---------------------------------------------------------------------------

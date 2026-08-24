@@ -64,6 +64,11 @@ class RaidAttendance(models.Model):
         blank=True,
     )    
 
+    attendance_percent = models.FloatField(
+        null=True,
+        blank=True,
+    )
+
     notes = models.TextField(blank=True)
 
     class Meta:
