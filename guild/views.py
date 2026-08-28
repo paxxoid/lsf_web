@@ -6,8 +6,9 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, render
 from django.core.paginator import Paginator
 
-
-
+from datetime import timedelta
+from django.db.models import Max, Sum, Q, Value, IntegerField, FloatField, F, ExpressionWrapper
+from django.db.models.functions import Coalesce
 
 from .forms import GuildApplicationForm
 from .models import (
@@ -90,17 +91,71 @@ def raid_detail(request, raid_id):
     ) 
 
 
+
 def roster(request):
-    members = GuildMember.objects.filter(active=True).select_related("main_character")
-    selected_class = request.GET.get("class", "").strip()
-    if selected_class:
-        members = members.filter(class_name=selected_class)
-    return render(
-        request,
-        "guild/roster.html",
-        {"members": members, "selected_class": selected_class},
+    cutoff_date = timezone.now() - timedelta(days=90)
+
+    raids = (
+        RaidAttendance.objects
+        .filter(raid_event__start_at__gte=cutoff_date)
+        .values("raid_event_id")
+        .annotate(max_raid_minutes=Max("total_raid_minutes"))
     )
 
+    total_raid_minutes_available = (
+        raids.aggregate(total=Sum("max_raid_minutes"))["total"] or 0
+    )
+
+    available_minutes_for_calc = max(total_raid_minutes_available, 1)
+
+    members = (
+        GuildMember.objects
+        .filter(active=True)
+        .select_related("main_character")
+        .annotate(
+            total_raid_minutes=Coalesce(
+                Sum(
+                    "raid_attendances__total_raid_minutes",
+                    filter=Q(
+                        raid_attendances__raid_event__start_at__gte=cutoff_date
+                    ),
+                ),
+                Value(0),
+                output_field=IntegerField(),
+            )
+        )
+        .annotate(
+            attendance_percentage=ExpressionWrapper(
+                F("total_raid_minutes") * Value(100.0) / Value(available_minutes_for_calc),
+                output_field=FloatField(),
+            )
+        )
+    ).order_by("-attendance_percentage", "character_name")
+
+    selected_class = request.GET.get("class", "").strip()
+    selected_character_type = request.GET.get("character_type", "").strip()
+    player_name = request.GET.get("player_name", "").strip()
+
+    if selected_class:
+        members = members.filter(class_name=selected_class)
+
+    if selected_character_type:
+        members = members.filter(character_type=selected_character_type)
+
+    if player_name:
+        members = members.filter(character_name__icontains=player_name)
+
+    context = {
+        "members": members,
+        "selected_class": selected_class,
+        "selected_character_type": selected_character_type,
+        "player_name": player_name,
+        "total_raid_minutes_available": total_raid_minutes_available,
+        "class_choices": GuildMember._meta.get_field("class_name").choices,
+        "character_type_choices": GuildMember._meta.get_field("character_type").choices,
+    }
+
+    return render(request, "guild/roster.html", context)
 
 def raids(request):
     now = timezone.now()

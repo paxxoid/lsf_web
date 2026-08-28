@@ -1,0 +1,25 @@
+SELECT SUM(max_raid_minutes) AS total_raid_minutes
+FROM (
+    SELECT
+        raid_event_id, start_at,
+        MAX(total_raid_minutes) AS max_raid_minutes
+    FROM guild_raidattendance A
+    left join guild_raidevent b
+    on a.raid_event_id = b.id
+    GROUP BY raid_event_id, start_at
+) AS raids;
+
+
+
+
+SELECT
+    a.raid_event_id,
+    b.start_at,
+    MAX(a.total_raid_minutes) AS max_raid_minutes
+FROM guild_raidattendance a
+LEFT JOIN guild_raidevent b
+    ON a.raid_event_id = b.id
+GROUP BY
+    a.raid_event_id,
+    b.start_at
+ORDER BY b.start_at;
