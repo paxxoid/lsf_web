@@ -90,11 +90,12 @@ def raid_detail(request, raid_id):
         },
     ) 
 
-
-
 def roster(request):
     cutoff_date = timezone.now() - timedelta(days=90)
 
+    # -------------------------------------------------
+    # Raid totals for the last 90 days
+    # -------------------------------------------------
     raids = (
         RaidAttendance.objects
         .filter(raid_event__start_at__gte=cutoff_date)
@@ -102,12 +103,22 @@ def roster(request):
         .annotate(max_raid_minutes=Max("total_raid_minutes"))
     )
 
+    total_raid_events = RaidEvent.objects.filter(
+        start_at__gte=cutoff_date
+    ).count()
+
     total_raid_minutes_available = (
         raids.aggregate(total=Sum("max_raid_minutes"))["total"] or 0
     )
 
     available_minutes_for_calc = max(total_raid_minutes_available, 1)
 
+    # Prevent divide by zero
+    raid_events_for_calc = max(total_raid_events, 1)
+
+    # -------------------------------------------------
+    # Member totals
+    # -------------------------------------------------
     members = (
         GuildMember.objects
         .filter(active=True)
@@ -122,16 +133,39 @@ def roster(request):
                 ),
                 Value(0),
                 output_field=IntegerField(),
-            )
+            ),
+
+            total_attendance_percent=Coalesce(
+                Sum(
+                    "raid_attendances__attendance_percent",
+                    filter=Q(
+                        raid_attendances__raid_event__start_at__gte=cutoff_date
+                    ),
+                ),
+                Value(0.0),
+            ),
         )
         .annotate(
-            attendance_percentage=ExpressionWrapper(
-                F("total_raid_minutes") * Value(100.0) / Value(available_minutes_for_calc),
+            # Attendance based on actual minutes
+            attendance_percentage_raw_minutes=ExpressionWrapper(
+                F("total_raid_minutes")
+                * Value(100.0)
+                / Value(available_minutes_for_calc),
                 output_field=FloatField(),
-            )
-        )
-    ).order_by("-attendance_percentage", "character_name")
+            ),
 
+            # Attendance based on summed per-raid %
+            attendance_percentage=ExpressionWrapper(
+                F("total_attendance_percent")
+                / Value(float(raid_events_for_calc)),
+                output_field=FloatField(),
+            ),
+        )
+    )
+
+    # -------------------------------------------------
+    # Filters
+    # -------------------------------------------------
     selected_class = request.GET.get("class", "").strip()
     selected_character_type = request.GET.get("character_type", "").strip()
     player_name = request.GET.get("player_name", "").strip()
@@ -145,12 +179,21 @@ def roster(request):
     if player_name:
         members = members.filter(character_name__icontains=player_name)
 
+    # -------------------------------------------------
+    # Sort by attendance %
+    # -------------------------------------------------
+    members = members.order_by(
+        "-attendance_percentage",
+        "character_name",
+    )
+
     context = {
         "members": members,
         "selected_class": selected_class,
         "selected_character_type": selected_character_type,
         "player_name": player_name,
         "total_raid_minutes_available": total_raid_minutes_available,
+        "total_raid_events": total_raid_events,
         "class_choices": GuildMember._meta.get_field("class_name").choices,
         "character_type_choices": GuildMember._meta.get_field("character_type").choices,
     }
@@ -316,6 +359,7 @@ def member_summary(request, member_id):
         id=member_id,
     )
 
+    cutoff_date = timezone.now() - timedelta(days=90)
     # Determine the main character so all known alts can be displayed.
     main_character = member.main_character or member
 
@@ -335,7 +379,28 @@ def member_summary(request, member_id):
         .order_by("-raid_event__start_at")
     )
 
+    total_raid_events = RaidEvent.objects.filter(
+        start_at__gte=cutoff_date
+    ).count()
+
+    total_attendance_percent = (
+        RaidAttendance.objects
+        .filter(
+            member=member,
+            raid_event__start_at__gte=cutoff_date,
+        )
+        .aggregate(total=Sum("attendance_percent"))["total"]
+        or 0
+    )
+
+    if total_raid_events > 0:
+        attendance_percentage = (
+            float(total_attendance_percent) / total_raid_events
+        )
+    else:
+        attendance_percentage = 0
     loot_records = (
+
         LootRecord.objects
         .filter(member=member)
         .order_by("-awarded_at")
@@ -349,6 +414,10 @@ def member_summary(request, member_id):
         "loot_records": loot_records,
         "attendance_count": attended_raids.count(),
         "loot_count": loot_records.count(),
+
+        "attendance_percentage": attendance_percentage,
+        "total_raid_events": total_raid_events, 
+              
     }
 
     return render(

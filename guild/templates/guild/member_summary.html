@@ -57,7 +57,7 @@
             <div class="member-stat">
                 <span class="stat-label">Raids Attended</span>
                 <span class="stat-value">
-                    {{ attendance_count }}
+                     {{ attendance_count }} of {{ total_raid_events }}   /  {{ attendance_percentage|floatformat:2 }}%
                 </span>
             </div>
 
@@ -138,6 +138,7 @@
                         <th>Late</th>
                         <th>Notes</th>
                         <th>Raid Minutes</th>
+                        <th>90-Day Attendance %</th>
                     </tr>
                 </thead>
 
@@ -172,6 +173,7 @@
                                 {{ attendance.notes|default:"—" }}
                             </td>
                             <td><center>{{ attendance.total_raid_minutes }}</center></td>
+                            <td><center>{{ attendance.attendance_percent|floatformat:2 }}%</center></td>
                     {% empty %}
                         <tr>
                             <td colspan="5" class="empty-table-cell">
