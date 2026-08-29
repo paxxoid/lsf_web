@@ -522,47 +522,130 @@ def member_summary(request, member_id):
     )
 
     cutoff_date = timezone.now() - timedelta(days=90)
-    # Determine the main character so all known alts can be displayed.
+
+    # -------------------------------------------------
+    # Determine the MAIN character
+    # -------------------------------------------------
+    # If viewing an alt:
+    #     main_character = its registered main
+    #
+    # If viewing a main:
+    #     main_character = itself
+    # -------------------------------------------------
     main_character = member.main_character or member
 
+    # -------------------------------------------------
+    # Get all registered alts for this main
+    # -------------------------------------------------
     known_alts = (
         GuildMember.objects
         .filter(main_character=main_character)
         .order_by("character_name")
     )
 
+    # -------------------------------------------------
+    # Character IDs belonging to this player
+    #
+    # Main + all registered alts
+    # -------------------------------------------------
+    credited_member_ids = [
+        main_character.id,
+        *known_alts.values_list("id", flat=True),
+    ]
+
+    # -------------------------------------------------
+    # Raid history
+    #
+    # Show raids attended by the main OR any registered alt.
+    # -------------------------------------------------
     attended_raids = (
         RaidAttendance.objects
-        .select_related("raid_event")
+        .select_related(
+            "raid_event",
+            "member",
+        )
         .filter(
-            member=member,
+            member_id__in=credited_member_ids,
             attended=True,
         )
-        .order_by("-raid_event__start_at")
+        .order_by(
+            "-raid_event__start_at",
+            "member__character_name",
+        )
     )
 
+    # -------------------------------------------------
+    # Total scheduled raids in the last 90 days
+    # -------------------------------------------------
     total_raid_events = RaidEvent.objects.filter(
         start_at__gte=cutoff_date
     ).count()
 
-    total_attendance_percent = (
+    # -------------------------------------------------
+    # Main + alt attendance, grouped PER RAID
+    #
+    # Example:
+    #
+    # Paxxar = 40%
+    # Paxxor = 60%
+    #
+    # Same raid = 100%, not two separate raids.
+    # -------------------------------------------------
+    raid_attendance = (
         RaidAttendance.objects
         .filter(
-            member=member,
+            member_id__in=credited_member_ids,
             raid_event__start_at__gte=cutoff_date,
         )
-        .aggregate(total=Sum("attendance_percent"))["total"]
-        or 0
+        .values("raid_event_id")
+        .annotate(
+            combined_percent=Coalesce(
+                Sum("attendance_percent"),
+                Value(0.0),
+                output_field=FloatField(),
+            )
+        )
     )
 
+    # -------------------------------------------------
+    # Sum player attendance
+    #
+    # Cap each individual raid at 100%.
+    # -------------------------------------------------
+    total_attendance_percent = 0.0
+
+    for raid in raid_attendance:
+        raid_percent = float(
+            raid["combined_percent"] or 0.0
+        )
+
+        total_attendance_percent += min(
+            raid_percent,
+            100.0,
+        )
+
+    # -------------------------------------------------
+    # Overall attendance %
+    #
+    # SUM(main + alt raid percentages)
+    # --------------------------------
+    # total scheduled raids
+    # -------------------------------------------------
     if total_raid_events > 0:
         attendance_percentage = (
-            float(total_attendance_percent) / total_raid_events
+            total_attendance_percent
+            / total_raid_events
         )
     else:
-        attendance_percentage = 0
-    loot_records = (
+        attendance_percentage = 0.0
 
+    # -------------------------------------------------
+    # Loot records
+    #
+    # Leaving this as the SELECTED character's loot.
+    # This preserves your existing behavior.
+    # -------------------------------------------------
+    loot_records = (
         LootRecord.objects
         .filter(member=member)
         .order_by("-awarded_at")
@@ -572,14 +655,16 @@ def member_summary(request, member_id):
         "member": member,
         "main_character": main_character,
         "known_alts": known_alts,
+
         "attended_raids": attended_raids,
         "loot_records": loot_records,
+
         "attendance_count": attended_raids.count(),
         "loot_count": loot_records.count(),
 
         "attendance_percentage": attendance_percentage,
-        "total_raid_events": total_raid_events, 
-
+        "total_attendance_percent": total_attendance_percent,
+        "total_raid_events": total_raid_events,
     }
 
     return render(

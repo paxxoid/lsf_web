@@ -134,6 +134,7 @@
                     <tr>
                         <th>Raid Date</th>
                         <th>Raid</th>
+                        <th>Played Character</th>
                         <th>Arrival Time</th>
                         <th>Late</th>
                         <th>Notes</th>
@@ -152,6 +153,9 @@
                             <td>
                                 {{ attendance.raid_event }}
                             </td>
+                            <td>
+                                {{ attendance.member.character_name }}
+                            </td>                            
 
                             <td>
                                 {% if attendance.arrival_time %}
