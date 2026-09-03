@@ -91,6 +91,7 @@ def raid_detail(request, raid_id):
     ) 
 
 def roster(request):
+    now = timezone.now()
     cutoff_date = timezone.now() - timedelta(days=90)
 
     # -------------------------------------------------
@@ -98,13 +99,14 @@ def roster(request):
     # -------------------------------------------------
     raids = (
         RaidAttendance.objects
-        .filter(raid_event__start_at__gte=cutoff_date)
+        .filter(raid_event__start_at__gte=cutoff_date, raid_event__start_at__lte=now)
         .values("raid_event_id")
         .annotate(max_raid_minutes=Max("total_raid_minutes"))
     )
 
     total_raid_events = RaidEvent.objects.filter(
-        start_at__gte=cutoff_date
+        start_at__gte=cutoff_date,
+        start_at__lte=now
     ).count()
 
     total_raid_minutes_available = (
@@ -137,7 +139,8 @@ def roster(request):
     rolled_up_attendance = (
         RaidAttendance.objects
         .filter(
-            raid_event__start_at__gte=cutoff_date
+            raid_event__start_at__gte=cutoff_date,
+            raid_event__start_at__lte=now
         )
         .annotate(
             credited_member_id=Coalesce(
@@ -217,7 +220,8 @@ def roster(request):
                 Sum(
                     "raid_attendances__total_raid_minutes",
                     filter=Q(
-                        raid_attendances__raid_event__start_at__gte=cutoff_date
+                        raid_attendances__raid_event__start_at__gte=cutoff_date,
+                        raid_attendances__raid_event__start_at__lte=now
                     ),
                 ),
                 Value(0),
@@ -228,7 +232,8 @@ def roster(request):
                 Sum(
                     "raid_attendances__attendance_percent",
                     filter=Q(
-                        raid_attendances__raid_event__start_at__gte=cutoff_date
+                        raid_attendances__raid_event__start_at__gte=cutoff_date,
+                        raid_attendances__raid_event__start_at__lte=now
                     ),
                 ),
                 Value(0.0),
@@ -520,7 +525,7 @@ def member_summary(request, member_id):
         GuildMember.objects.select_related("main_character"),
         id=member_id,
     )
-
+    now = timezone.now()
     cutoff_date = timezone.now() - timedelta(days=90)
 
     # -------------------------------------------------
@@ -578,7 +583,8 @@ def member_summary(request, member_id):
     # Total scheduled raids in the last 90 days
     # -------------------------------------------------
     total_raid_events = RaidEvent.objects.filter(
-        start_at__gte=cutoff_date
+        start_at__gte=cutoff_date,
+        start_at__lte=now,
     ).count()
 
     # -------------------------------------------------
@@ -596,6 +602,7 @@ def member_summary(request, member_id):
         .filter(
             member_id__in=credited_member_ids,
             raid_event__start_at__gte=cutoff_date,
+            raid_event__start_at__lte=now,
         )
         .values("raid_event_id")
         .annotate(
