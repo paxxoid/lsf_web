@@ -14,6 +14,8 @@ from ninja.errors import HttpError
 from quarm_reference.routes import router as quarm_router
 from quarm_reference.services.items import get_item_by_id
 from .permissions import require_permission
+from .services.attendance import get_attendance_summary
+
 from quarm_reference.services.queries import (
     resolve_item_reference,
 )
@@ -188,6 +190,27 @@ class GuildMemberOut(Schema):
     bio: str
     last_raid_attended: Optional[datetime] = None
 
+
+class AttendanceOverallPlayerOut(Schema):
+    main_character: GuildMemberOut
+    alts: list[GuildMemberOut]
+
+    total_attendance_percent: float
+    attendance_percentage: float
+
+    total_raid_minutes: int
+    attendance_percentage_raw_minutes: float
+
+
+class AttendanceOverallOut(Schema):
+    cutoff_date: datetime
+    through_date: datetime
+
+    total_raid_events: int
+    total_raid_minutes_available: int
+
+    players: list[AttendanceOverallPlayerOut]
+
 class LootRecordCreateOut(Schema):
     raid_event_id: int
     member_id: int
@@ -245,22 +268,41 @@ def serialize_raid(event):
 
 
 def serialize_attendance(record):
+    main_character = (
+        record.member.main_character
+        or record.member
+    )
+
     return {
         "id": record.id,
+
         "raid_event_id": record.raid_event_id,
         "raid_event": record.raid_event.title,
         "raid_date": record.raid_date,
         "zone": record.raid_event.zone,
+
         "member_id": record.member_id,
         "member": record.member.character_name,
+
+        "main_character_id": main_character.id,
+        "main_character": main_character.character_name,
+
         "class_name": record.member.class_name,
-        "class_name_display": record.member.get_class_name_display(),
+        "class_name_display":
+            record.member.get_class_name_display(),
+
         "attended": record.attended,
         "arrival_time": record.arrival_time,
         "is_late": record.is_late,
+
+        "total_raid_minutes":
+            record.total_raid_minutes,
+
+        "attendance_percent":
+            record.attendance_percent,
+
         "notes": record.notes,
     }
-
 
 def serialize_loot(
     record,
@@ -789,6 +831,7 @@ def list_attendance(
     zone: Optional[str] = None,
     limit: int = 5000,
     offset: int = 0,
+    
 ):
     require_permission(request, "attendance:read")
     limit, offset = bounded_page(limit, offset)
@@ -796,6 +839,7 @@ def list_attendance(
     queryset = RaidAttendance.objects.select_related(
         "raid_event",
         "member",
+        "member__main_character",
     )
 
     if raid_event_id is not None:
@@ -814,17 +858,244 @@ def list_attendance(
         serialize_attendance(record)
         for record in queryset[offset:offset + limit]
     ]
+@api.get(
+    "/v1/attendance/overall",
+    auth=api_key_auth,
+    response=AttendanceOverallOut,
+    summary="Get Overall Raid Attendance",
+    description="""
+Returns rolled-up raid attendance.
 
+### Attendance logic
+
+- Future raids are excluded.
+- Attendance from registered alts is credited to their main character.
+- Main + alt attendance is combined per raid.
+- Attendance for one raid is capped at 100%.
+- Main + alt raid minutes are capped at the total duration of the raid.
+- Missed scheduled raids count as 0%.
+
+Overall attendance:
+
+`sum of credited attendance percentages / total scheduled raids`
+
+### Parameters
+
+- `days` - Number of days to calculate attendance over. Default: 90.
+- `main_character_id` - Optionally return one specific main character.
+- `character_name` - Optionally search for a main character by name.
+""",
+)
+def overall_attendance(
+    request,
+    days: int = 90,
+    main_character_id: Optional[int] = None,
+    character_name: Optional[str] = None,
+):
+    require_permission(
+        request,
+        "attendance:read",
+    )
+
+    # ---------------------------------------------------------
+    # Validate days
+    # ---------------------------------------------------------
+    if days < 1:
+        raise HttpError(
+            400,
+            "days must be greater than 0.",
+        )
+
+    if days > 3650:
+        raise HttpError(
+            400,
+            "days cannot exceed 3650.",
+        )
+
+    # ---------------------------------------------------------
+    # Shared attendance calculation
+    # ---------------------------------------------------------
+    summary = get_attendance_summary(
+        days=days,
+    )
+
+    # ---------------------------------------------------------
+    # Active main characters
+    # ---------------------------------------------------------
+    mains = (
+        GuildMember.objects
+        .filter(
+            active=True,
+            main_character__isnull=True,
+        )
+        .select_related("main_character")
+    )
+
+    # ---------------------------------------------------------
+    # Optional main character ID filter
+    # ---------------------------------------------------------
+    if main_character_id is not None:
+        mains = mains.filter(
+            id=main_character_id
+        )
+
+    # ---------------------------------------------------------
+    # Optional character name filter
+    # ---------------------------------------------------------
+    if character_name:
+        mains = mains.filter(
+            character_name__icontains=
+                character_name.strip()
+        )
+
+    mains = list(
+        mains.order_by("character_name")
+    )
+
+    # ---------------------------------------------------------
+    # Main IDs
+    # ---------------------------------------------------------
+    main_ids = [
+        main.id
+        for main in mains
+    ]
+
+    # ---------------------------------------------------------
+    # Registered alts
+    # ---------------------------------------------------------
+    alts = (
+        GuildMember.objects
+        .filter(
+            main_character_id__in=main_ids,
+        )
+        .select_related("main_character")
+        .order_by("character_name")
+    )
+
+    # ---------------------------------------------------------
+    # Group alts by main
+    # ---------------------------------------------------------
+    alts_by_main = {}
+
+    for alt in alts:
+        alts_by_main.setdefault(
+            alt.main_character_id,
+            [],
+        ).append(alt)
+
+    # ---------------------------------------------------------
+    # Build response
+    # ---------------------------------------------------------
+    players = []
+
+    for main in mains:
+
+        stats = summary["players"].get(
+            main.id,
+            {
+                "total_attendance_percent": 0.0,
+                "attendance_percentage": 0.0,
+                "total_raid_minutes": 0,
+                "attendance_percentage_raw_minutes": 0.0,
+            },
+        )
+
+        players.append(
+            {
+                "main_character":
+                    serialize_member(main),
+
+                "alts": [
+                    serialize_member(alt)
+                    for alt in alts_by_main.get(
+                        main.id,
+                        [],
+                    )
+                ],
+
+                "total_attendance_percent": round(
+                    float(
+                        stats.get(
+                            "total_attendance_percent",
+                            0.0,
+                        )
+                    ),
+                    2,
+                ),
+
+                "attendance_percentage": round(
+                    float(
+                        stats.get(
+                            "attendance_percentage",
+                            0.0,
+                        )
+                    ),
+                    2,
+                ),
+
+                "total_raid_minutes": int(
+                    stats.get(
+                        "total_raid_minutes",
+                        0,
+                    )
+                ),
+
+                "attendance_percentage_raw_minutes": round(
+                    float(
+                        stats.get(
+                            "attendance_percentage_raw_minutes",
+                            0.0,
+                        )
+                    ),
+                    2,
+                ),
+            }
+        )
+
+    # ---------------------------------------------------------
+    # Highest attendance first
+    # ---------------------------------------------------------
+    players.sort(
+        key=lambda player: (
+            -player["attendance_percentage"],
+            player[
+                "main_character"
+            ]["character_name"].lower(),
+        )
+    )
+
+    return {
+        "cutoff_date":
+            summary["cutoff_date"],
+
+        "through_date":
+            summary["through_date"],
+
+        "total_raid_events":
+            summary["total_raid_events"],
+
+        "total_raid_minutes_available":
+            summary[
+                "total_raid_minutes_available"
+            ],
+
+        "players":
+            players,
+    }
 
 @api.get("/v1/attendance/{int:attendance_id}", auth=api_key_auth)
 def get_attendance(request, attendance_id: int):
     require_permission(request, "attendance:read")
+
     record = get_object_or_404(
-        RaidAttendance.objects.select_related("raid_event", "member"),
+        RaidAttendance.objects.select_related(
+            "raid_event",
+            "member",
+        ),
         pk=attendance_id,
     )
-    return serialize_attendance(record)
 
+    return serialize_attendance(record)
 
 @api.patch("/v1/attendance/{int:attendance_id}", auth=api_key_auth)
 def update_attendance(
@@ -1349,6 +1620,7 @@ def add_raid_attendance(
             | new_percent_members
         ),
     }
+
 
 # ---------------------------------------------------------------------------
 # Loot records: select and update
