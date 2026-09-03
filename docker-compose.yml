@@ -1,0 +1,36 @@
+services:
+ lsf_web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: lsf-web
+
+    env_file:
+      - .env
+
+    volumes:
+      - /opt/docker/containers/lsf_web_alpha/media:/app/media
+
+    expose:
+      - "8000"
+
+#    depends_on:
+#      db:
+#        condition: service_healthy
+
+    networks:
+      - reverse_proxy
+      - mariadb_net
+
+    restart: unless-stopped
+
+
+networks:
+  reverse_proxy:
+    external: true
+
+  mariadb_net:
+    external: true
+#    driver: bridge
+#    internal: true
