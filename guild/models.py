@@ -256,12 +256,58 @@ class RaidEvent(models.Model):
     description = models.TextField(blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.SCHEDULED)
     public = models.BooleanField(default=True)
+    
+    recurring_schedule = models.ForeignKey(
+        "RecurringRaidSchedule",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_raids",
+    )    
 
     class Meta:
         ordering = ["start_at"]
 
     def __str__(self):
         return f"{self.title} — {self.start_at:%Y-%m-%d}"
+
+class RecurringRaidSchedule(models.Model):
+    class Weekday(models.IntegerChoices):
+        MONDAY = 0, "Monday"
+        TUESDAY = 1, "Tuesday"
+        WEDNESDAY = 2, "Wednesday"
+        THURSDAY = 3, "Thursday"
+        FRIDAY = 4, "Friday"
+        SATURDAY = 5, "Saturday"
+        SUNDAY = 6, "Sunday"
+
+    title = models.CharField(max_length=200)
+    zone = models.CharField(max_length=200, blank=True, default="TBD")
+    description = models.TextField(blank=True)
+
+    weekday = models.PositiveSmallIntegerField(choices=Weekday.choices)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+
+    status = models.CharField(
+        max_length=20,
+        choices=RaidEvent.Status.choices,
+        default=RaidEvent.Status.SCHEDULED,
+    )
+    public = models.BooleanField(default=True)
+    enabled = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ("weekday", "start_time", "title")
+        verbose_name = "Recurring raid schedule"
+        verbose_name_plural = "Recurring raid schedules"
+
+    def __str__(self):
+        return (
+            f"{self.title} — "
+            f"{self.get_weekday_display()} at "
+            f"{self.start_time:%I:%M %p}"
+        )    
 
 class LootRecord(models.Model):
     raid_event = models.ForeignKey(

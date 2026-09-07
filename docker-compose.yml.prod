@@ -1,0 +1,56 @@
+services:
+ lsf_web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: lsf-web
+
+    env_file:
+      - .env
+
+    volumes:
+      - /opt/docker/containers/lsf_web/media:/app/media
+
+    expose:
+      - "8000"
+
+    networks:
+      - reverse_proxy
+      - mariadb_net
+
+    restart: unless-stopped
+
+
+  lsf_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: lsf-worker
+
+    env_file:
+      - .env
+
+    working_dir: /app
+    entrypoint: ["python", "manage.py", "qcluster"]
+
+    volumes:
+      - /opt/docker/containers/lsf_web/media:/app/media
+
+    depends_on:
+      - lsf_web
+
+    networks:
+      - mariadb_net
+
+    restart: unless-stopped
+
+
+
+networks:
+  reverse_proxy:
+    external: true
+
+  mariadb_net:
+    external: true

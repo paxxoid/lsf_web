@@ -5,6 +5,7 @@ from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.utils.html import format_html
 from django import forms
 
+
 from .models import (
     ApiKey,
     GuildApplication,
@@ -13,7 +14,8 @@ from .models import (
     LootRecord,
     RaidEvent,
     Screenshot,
-    RaidAttendance
+    RaidAttendance,
+    RecurringRaidSchedule,
 )
 
 API_PERMISSION_CHOICES = [
@@ -43,7 +45,59 @@ API_PERMISSION_CHOICES = [
     ("admin", "Administrator — All permissions"),
 ]
 
+@admin.register(RecurringRaidSchedule)
+class RecurringRaidScheduleAdmin(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "weekday_name",
+        "start_time",
+        "end_time",
+        "zone",
+        "status",
+        "public",
+        "enabled",
+    )
+    list_filter = ("weekday", "enabled", "public", "status")
+    search_fields = ("title", "zone", "description")
+    ordering = ("weekday", "start_time")
+    actions = ("generate_next_week",)
 
+    @admin.display(description="Weekday", ordering="weekday")
+    def weekday_name(self, obj):
+        return obj.get_weekday_display()
+
+    @admin.action(description="Generate selected raids for next week")
+    def generate_next_week(self, request, queryset):
+        from .tasks import create_weekly_raids
+
+        schedule_ids = list(queryset.values_list("id", flat=True))
+
+        result = create_weekly_raids(schedule_ids=schedule_ids)
+
+        self.message_user(
+            request,
+            (
+                f"Created {result['created_count']} raid(s); "
+                f"skipped {result['skipped_count']} existing raid(s)."
+            ),
+        )
+
+
+@admin.register(RaidEvent)
+class RaidEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "zone",
+        "start_at",
+        "end_at",
+        "status",
+        "public",
+        "recurring_schedule",
+    )
+    list_filter = ("status", "public", "start_at", "recurring_schedule")
+    search_fields = ("title", "zone", "description")
+    ordering = ("-start_at",)
+    date_hierarchy = "start_at"
 
 
 @admin.register(GuildMember)
@@ -53,11 +107,11 @@ class GuildMemberAdmin(admin.ModelAdmin):
     search_fields = ("character_name", "race", "bio")
 
 
-@admin.register(RaidEvent)
-class RaidEventAdmin(admin.ModelAdmin):
-    list_display = ("title", "zone", "start_at", "end_at", "status", "public")
-    list_filter = ("status", "public", "start_at")
-    search_fields = ("title", "zone", "description")
+# @admin.register(RaidEvent)
+# class RaidEventAdmin(admin.ModelAdmin):
+#     list_display = ("title", "zone", "start_at", "end_at", "status", "public")
+#     list_filter = ("status", "public", "start_at")
+#     search_fields = ("title", "zone", "description")
 
 
 @admin.register(LootRecord)
