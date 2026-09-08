@@ -139,9 +139,19 @@
                             <td>
                                 {{ loot.member.character_name }}
                             </td>
-
                             <td>
-                                {{ loot.item_name }}
+                                {% if loot.item_id %}
+                                    <a
+                                        href="{{ loot.item_url }}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        data-pqdi-item-id="{{ loot.item_id|stringformat:'d' }}"
+                                    >
+                                        {{ loot.item_name }}
+                                    </a>
+                                {% else %}
+                                    {{ loot.item_name }}
+                                {% endif %}
                             </td>
 
                             <td>
@@ -173,4 +183,7 @@
     </article>
 </section>
 
+
+{% include "guild/includes/pqdi_tooltip.html" %}
 {% endblock %}
+
