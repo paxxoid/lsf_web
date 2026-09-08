@@ -218,13 +218,13 @@
                             <td>
                                 {{ record.awarded_at|date:"M j, Y g:i A" }}
                             </td>
-
-                            <td class="item-name-column">
-                                {% if record.item_url %}
+                            <td>
+                                {% if record.item_id %}
                                     <a
                                         href="{{ record.item_url }}"
                                         target="_blank"
                                         rel="noopener noreferrer"
+                                        data-pqdi-item-id="{{ record.item_id|stringformat:'d' }}"
                                     >
                                         {{ record.item_name }}
                                     </a>
@@ -232,6 +232,7 @@
                                     {{ record.item_name }}
                                 {% endif %}
                             </td>
+                            
 
                             <td>
                                 {{ record.zone|default:"—" }}
@@ -262,4 +263,6 @@
     </section>
 
 </div>
+
+{% include "guild/includes/pqdi_tooltip.html" %}
 {% endblock %}
