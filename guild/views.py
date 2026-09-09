@@ -91,6 +91,7 @@ def raid_detail(request, raid_id):
             "loot_records": loot_records,
         },
     ) 
+
 def roster(request):
     # -------------------------------------------------
     # Shared attendance calculation

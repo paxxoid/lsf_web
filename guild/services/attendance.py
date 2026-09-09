@@ -14,7 +14,6 @@ from django.utils import timezone
 
 from ..models import RaidAttendance, RaidEvent
 
-
 def get_attendance_summary(days=90, now=None):
     """
     Calculate guild attendance for the requested rolling period.
@@ -24,6 +23,7 @@ def get_attendance_summary(days=90, now=None):
         - Future raids are excluded.
         - Alt attendance is credited to main_character.
         - Main + alt attendance is combined PER RAID.
+        - A main can only receive ONE raid-attended credit per raid.
         - Per-raid attendance is capped at 100%.
         - Per-raid minutes are capped at the raid's available minutes.
     """
@@ -68,17 +68,26 @@ def get_attendance_summary(days=90, now=None):
     # ---------------------------------------------------------
     # Main + alt attendance grouped PER RAID
     #
-    # If member is an alt:
-    #     use main_character_id
+    # ALT:
+    #     credit attendance to main_character_id
     #
-    # Otherwise:
-    #     use member_id
+    # MAIN:
+    #     credit attendance to member_id
+    #
+    # IMPORTANT:
+    # Because this is grouped by:
+    #
+    #     credited_member_id + raid_event_id
+    #
+    # a main and any number of alts will produce exactly
+    # ONE rollup row for that raid.
     # ---------------------------------------------------------
     rollups = (
         RaidAttendance.objects
         .filter(
             raid_event__start_at__gte=cutoff_date,
             raid_event__start_at__lte=now,
+            attended=True,
         )
         .annotate(
             credited_member_id=Coalesce(
@@ -105,8 +114,12 @@ def get_attendance_summary(days=90, now=None):
         )
     )
 
+    # ---------------------------------------------------------
+    # Player totals
+    # ---------------------------------------------------------
     players = defaultdict(
         lambda: {
+            "raids_attended": 0,
             "total_attendance_percent": 0.0,
             "total_raid_minutes": 0,
         }
@@ -126,6 +139,17 @@ def get_attendance_summary(days=90, now=None):
         raid_minutes = int(
             row["raid_minutes"] or 0
         )
+
+        # -----------------------------------------------------
+        # ONE attendance instance per raid.
+        #
+        # This row already represents:
+        #
+        #     main + all alts
+        #
+        # for ONE raid_event_id.
+        # -----------------------------------------------------
+        players[main_id]["raids_attended"] += 1
 
         # Main + alts cannot exceed 100% for one raid.
         raid_percent = min(
@@ -158,6 +182,31 @@ def get_attendance_summary(days=90, now=None):
     # ---------------------------------------------------------
     for stats in players.values():
 
+        # ---------------------------------------------
+        # Event participation:
+        #
+        # "How many raids did they attend?"
+        #
+        # Example:
+        #     4 raids attended / 5 total = 80%
+        # ---------------------------------------------
+        if total_raid_events > 0:
+            stats["raid_participation_percentage"] = (
+                stats["raids_attended"]
+                * 100.0
+                / total_raid_events
+            )
+        else:
+            stats["raid_participation_percentage"] = 0.0
+
+        # ---------------------------------------------
+        # Average per-raid attendance percentage:
+        #
+        # Example:
+        #     100 + 75 + 50 + 100 + 0
+        #     -----------------------
+        #                5
+        # ---------------------------------------------
         if total_raid_events > 0:
             stats["attendance_percentage"] = (
                 stats["total_attendance_percent"]
@@ -166,6 +215,11 @@ def get_attendance_summary(days=90, now=None):
         else:
             stats["attendance_percentage"] = 0.0
 
+        # ---------------------------------------------
+        # Raw-minute attendance:
+        #
+        # actual minutes / available minutes
+        # ---------------------------------------------
         if total_raid_minutes_available > 0:
             stats[
                 "attendance_percentage_raw_minutes"
