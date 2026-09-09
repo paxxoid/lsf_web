@@ -497,6 +497,14 @@ def member_summary(request, member_id):
         get_attendance_summary(days=90)
     )
 
+    cutoff_date = attendance_summary[
+        "cutoff_date"
+    ]
+
+    through_date = attendance_summary[
+        "through_date"
+    ]
+
     player_stats = (
         attendance_summary[
             "players"
@@ -540,22 +548,57 @@ def member_summary(request, member_id):
     )
 
     # -------------------------------------------------
+    # Base attendance QuerySet
+    #
+    # IMPORTANT:
+    # Uses same 90-day window as attendance summary.
+    # Includes main + all registered alts.
+    # -------------------------------------------------
+    attendance_base = (
+        RaidAttendance.objects
+        .filter(
+            member_id__in=credited_member_ids,
+            attended=True,
+            raid_event__start_at__gte=cutoff_date,
+            raid_event__start_at__lte=through_date,
+        )
+    )
+
+    # -------------------------------------------------
+    # Number of UNIQUE raids attended
+    #
+    # Main + any number of alts appearing in the
+    # same raid still counts as ONE raid.
+    # -------------------------------------------------
+    attendance_count = (
+        attendance_base
+        .values(
+            "raid_event_id"
+        )
+        .distinct()
+        .count()
+    )
+
+    # -------------------------------------------------
     # Raid history
     #
-    # Show actual character used:
-    # Paxxar / Paxxor / etc.
+    # Keep individual attendance records here so
+    # we can still see the actual character used:
+    #
+    # Kumba
+    # Catillac
+    # Emarie
+    # Jabby
+    #
+    # There may be multiple rows for a single raid,
+    # but they DO NOT increase attendance_count.
     # -------------------------------------------------
     attended_raids = (
-        RaidAttendance.objects
+        attendance_base
         .select_related(
             "raid_event",
             "member",
             "member__main_character",
-        )
-        .filter(
-            member_id__in=
-                credited_member_ids,
-            attended=True,
         )
         .order_by(
             "-raid_event__start_at",
@@ -567,14 +610,21 @@ def member_summary(request, member_id):
     # Loot
     #
     # Still only selected character, preserving
-    # your existing behavior.
+    # existing behavior.
     # -------------------------------------------------
     loot_records = (
         LootRecord.objects
-        .filter(member=member)
-        .order_by("-awarded_at")
+        .filter(
+            member=member
+        )
+        .order_by(
+            "-awarded_at"
+        )
     )
 
+    # -------------------------------------------------
+    # Context
+    # -------------------------------------------------
     context = {
         "member": member,
 
@@ -590,8 +640,9 @@ def member_summary(request, member_id):
         "loot_records":
             loot_records,
 
+        # UNIQUE raid count
         "attendance_count":
-            attended_raids.count(),
+            attendance_count,
 
         "loot_count":
             loot_records.count(),
