@@ -183,7 +183,12 @@ def write_credentials(path):
         "protocol": "tcp",
         "default-character-set": "utf8mb4",
     }
-    with path.open("x", opener=lambda name, flags: os.open(name, flags, 0o600)) as out:
+    with open(
+        path,
+        "x",
+        encoding="utf-8",
+        opener=lambda name, flags: os.open(name, flags, 0o600),
+    ) as out:
         out.write("[client]\n")
         for key, value in values.items():
             out.write(f"{key}={option_value(value)}\n")
