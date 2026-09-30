@@ -58,11 +58,12 @@
                 <a href="{% url 'guild:roster' %}" class="btn-secondary">Clear</a>
             </div>
         </form>
+            <br>
             {% if quarm_db_status %}
-            <p class="quarm-db-status">
+            <p class="quarm-db-status"><b>
                 Quarm DB last updated on
                 {{ quarm_db_status.updated_at|date:"M j, Y, g:i A T" }}
-                · Version {{ quarm_db_status.version }}
+                · Version {{ quarm_db_status.version }}</b>
             </p>
             {% else %}
             <p class="quarm-db-status">
