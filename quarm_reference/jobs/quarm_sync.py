@@ -254,7 +254,7 @@ def _sync(root, lock, dry_run):
         partial = backup.with_suffix(".partial")
         log.info("Backing up %s", DATABASE)
         with partial.open("wb") as out:
-            run_client(["mariadb-dump", defaults, "--lock-all-tables", "--quick",
+            run_client(["mariadb-dump", defaults, "--lock-tables", "--quick",
                         "--routines", "--events", "--triggers", "--hex-blob", DATABASE],
                        lock, errors, output=out)
             out.flush()
