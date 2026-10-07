@@ -92,6 +92,9 @@ class RespawnTimerSchema(Schema):
     stored_name: str | None = None
     zone_code: str | None = None
     zone_id: str | None = None
+    spawn_point_id: int | None = None
+    spawn_group_id: int | None = None
+    spawn_chance_percent: float | None = None
 
 
 class MerchantWareSchema(Schema):
@@ -158,3 +161,4 @@ class ZoneSchema(Schema):
     is_outdoor: bool
     has_reduced_spawn_timers: bool
     zem: float | None = None
+
