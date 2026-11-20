@@ -269,7 +269,11 @@ class RaidEvent(models.Model):
         ordering = ["start_at"]
 
     def __str__(self):
-        return f"{self.title} — {self.start_at:%Y-%m-%d}"
+        local_start = timezone.localtime(
+            self.start_at,
+            timezone.get_default_timezone(),
+        )
+        return f"{self.title} — {local_start:%Y-%m-%d}"
 
 class RecurringRaidSchedule(models.Model):
     class Weekday(models.IntegerChoices):

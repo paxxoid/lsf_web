@@ -33,3 +33,14 @@ class RaidApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(RaidEvent.objects.count(), 1)
         self.assertEqual(RaidEvent.objects.get().title, "Moonlit Raid")
+
+
+class RaidEventDisplayTests(TestCase):
+    def test_string_uses_project_timezone_for_date(self):
+        raid = RaidEvent(
+            title="Rathe Council",
+            start_at=datetime.fromisoformat("2026-11-19T00:04:00+00:00"),
+            end_at=datetime.fromisoformat("2026-11-19T02:04:00+00:00"),
+        )
+
+        self.assertEqual(str(raid), "Rathe Council — 2026-11-18")
