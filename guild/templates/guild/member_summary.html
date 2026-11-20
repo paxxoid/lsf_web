@@ -1,4 +1,5 @@
 {% extends "guild/base.html" %}
+{% load tz %}
 
 {% block title %}
     {{ member.character_name }} - Member Summary
@@ -135,7 +136,7 @@
                         <th>Raid Date</th>
                         <th>Raid</th>
                         <th>Played Character</th>
-                        <th>Arrival Time</th>
+                        <th>Arrival Time (ET)</th>
                         <th>Late</th>
                         <th>Notes</th>
                         <th>Raid Minutes</th>
@@ -147,7 +148,7 @@
                     {% for attendance in attended_raids %}
                         <tr>
                             <td>
-                                {{ attendance.raid_event.start_at|date:"M j, Y" }}
+                                {{ attendance.raid_event.start_at|timezone:"America/New_York"|date:"M j, Y" }}
                             </td>
 
                             <td>
@@ -158,19 +159,15 @@
                             </td>                            
 
                             <td>
-                                {% if attendance.arrival_time %}
-                                    {{ attendance.arrival_time|date:"g:i A" }}
-                                {% else %}
-                                    —
-                                {% endif %}
+                                    {% if attendance.arrival_time %}
+                                        {{ attendance.arrival_time|timezone:"America/New_York"|date:"g:i A T" }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
                             </td>
 
                             <td>
-                                {% if attendance.is_late %}
-                                    Yes
-                                {% else %}
-                                    No
-                                {% endif %}
+                                    NA
                             </td>
 
                             <td class="notes-column">
@@ -203,7 +200,7 @@
             <table class="member-table">
                 <thead>
                     <tr>
-                        <th>Awarded</th>
+                        <th>Awarded (ET)</th>
                         <th>Item</th>
                         <th>Zone</th>
                         <th>NPC</th>
@@ -216,7 +213,7 @@
                     {% for record in loot_records %}
                         <tr>
                             <td>
-                                {{ record.awarded_at|date:"M j, Y g:i A" }}
+                                {{ record.awarded_at|timezone:"America/New_York"|date:"M j, Y g:i A T" }}
                             </td>
                             <td>
                                 {% if record.item_id %}
